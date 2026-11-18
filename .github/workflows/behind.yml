@@ -16,7 +16,7 @@ name: behind
 #     issues: write
 #   jobs:
 #     behind:
-#       uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.1
+#       uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.2
 
 on:
   workflow_call:

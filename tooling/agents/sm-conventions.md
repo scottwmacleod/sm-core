@@ -16,6 +16,7 @@ Scott owns the suite and doesn't read code. Make technical decisions yourself an
 - Work on a branch and open a PR. Never commit to `main` (or `master`).
 - Fill in the PR template. CI, build and tool changes include before and after numbers from real runs.
 - PRs squash-merge automatically once the required check `ci` passes. Dependabot minor and patch updates do too; majors wait for Scott.
+- To stop a PR merging on its own, label it `hold`. Auto-merge stays off while the label is on, and comes back when it is removed.
 - One small PR per change.
 - Every behaviour change uses `/tdd`: a failing test comes first.
 - The pre-push hook (`vendor/sm-core/tooling/hooks`, installed by the `prepare` script) runs format, lint and typecheck on the changed files. Don't bypass it with `--no-verify`; if it fails, fix the cause.
