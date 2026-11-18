@@ -17,6 +17,8 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `tooling/github/` | The PR template and the bug and feature issue forms. Sync installs them into `.github/`. |
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
 | `tooling/hooks/` | The pre-push hook (format, lint and typecheck on changed files) and `install.mjs`, which points git at it. |
+| `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
+| `.github/workflows/` | The shared CI, called by products at a release tag. See **Shared CI**. |
 | `VERSION` | The release, CalVer `YY.MM`, plus `.N` for a second release in the same month (`26.11.1`). |
 
 The site's favicon is `sm_`. Both `sm-lime-*` and `sm-dark-*` ship until the tile colour is decided.
@@ -78,6 +80,47 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 Products self-host Geist and Geist Mono however their stack does it (a woff2 file, `next/font`, `@fontsource`). Never load them from a font CDN.
 
 Product-only tokens use the product's own prefix (`--rollin-size-roll-row`) and never redefine an `--sm-*` value.
+
+## Shared CI
+
+Reusable workflows in `.github/workflows/`. A product calls them at a release tag, and Dependabot (`github-actions` ecosystem) bumps the tag. Third-party actions inside are pinned by SHA, and none needs a secret beyond `GITHUB_TOKEN`.
+
+| Workflow | What it does |
+| --- | --- |
+| `web-ci.yml` | Lint (plus `verify.mjs` and any extra `checks`), typecheck, unit tests, build and optional Playwright, as parallel jobs. Blobless clone, `node_modules` and Playwright browsers cached, superseded PR runs cancelled, docs-only PRs skipped via `skip-paths`. Each job has a time budget (`*-budget-seconds`) and fails when it runs over. |
+| `budgets.yml` | Builds once, then checks gzipped JS and CSS against `js-kb` and `css-kb` (one size comment per PR, with main's last sizes as "before") and runs Lighthouse against the build or a `lighthouse-url`. Defaults match the site: accessibility 0.95, the rest 0.90. |
+| `auto-merge.yml` | Squash auto-merge for non-draft PRs from the repo's own branches. |
+| `dependabot-automerge.yml` | Auto-merge for Dependabot minor and patch updates. Majors wait for Scott. |
+| `audit.yml` | `npm audit --audit-level=high`. Not a required check. |
+| `behind.yml` | Weekly: opens one issue when `vendor/sm-core` is older than sm-core's latest release, or a tool in `tooling/pins.json` has a newer version on npm. Closes it when everything is current. |
+
+Each workflow's header has a caller example. The product's main workflow looks like this, with one required check named `ci`:
+
+```yaml
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read   # for skip-paths
+jobs:
+  web:
+    uses: scottwmacleod/sm-core/.github/workflows/web-ci.yml@v26.11.1
+    with:
+      e2e: true
+      skip-paths: '^(docs/|[^/]+\.md$)'
+  ci:
+    needs: web
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.web.result }}" = success
+```
+
+The inputs default to the shared script names (`npm run lint`, `bun check`, `npm test`, `npm run build`, `npm run e2e`) and to Node from `.nvmrc`. Pass an empty string to drop a job. sm-core's own `ci.yml` runs `web-ci.yml` from the same commit, so a change to it is proven before it's tagged.
 
 ## Changing the brand
 
