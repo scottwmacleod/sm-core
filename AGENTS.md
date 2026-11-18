@@ -18,3 +18,22 @@ Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin
 - Token names: lowercase, hyphenated, unique. Core CSS variables are `--sm-*`; products add their own prefix and never redefine `--sm-*`.
 - `build`, `check`, `sync`, `verify` and the hooks stay dependency-free so any stack can run them.
 - Work on a branch and open a PR; never commit to `main`.
+- Every change to `scripts/` uses `/tdd`: a failing check comes first.
+
+## Definition of done
+
+`npm run check` passes; CI runs the same command as the `ci` check. PRs auto-merge (squash) once it passes.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues for `scottwmacleod/sm-core`, via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` plus `docs/adr/` at the root. See `docs/agents/domain.md`.

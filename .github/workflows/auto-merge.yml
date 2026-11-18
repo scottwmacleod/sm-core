@@ -3,6 +3,7 @@ name: auto-merge
 # Turns on squash auto-merge for every non-draft PR from a branch in the
 # calling repo, so it merges once the required checks pass. Fork PRs and
 # Dependabot PRs are left alone (dependabot-automerge.yml handles those).
+# sm-core runs it on its own PRs too (the pull_request trigger).
 #
 # Caller:
 #   on:
@@ -16,7 +17,13 @@ name: auto-merge
 #       uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.1
 
 on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
   workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   auto-merge:
