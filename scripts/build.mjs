@@ -149,6 +149,10 @@ export function ratio(a, b) {
 
 export function problems(doc) {
   const out = [];
+  // CalVer: YY.MM, plus .N for a second release in the same month.
+  if (!/^\d{2}\.(0[1-9]|1[0-2])(\.[1-9]\d*)?$/.test(String(doc.version))) {
+    out.push(`version "${doc.version}" must be YY.MM or YY.MM.N`);
+  }
   const names = [
     ...doc.color.tokens,
     ...doc.spacing.tokens,
