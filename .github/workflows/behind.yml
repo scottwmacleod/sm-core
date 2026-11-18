@@ -1,0 +1,77 @@
+name: behind
+
+# Weekly: is this repo behind sm-core? Compares vendor/sm-core/manifest.json
+# with sm-core's latest release, and the agent tools pinned in
+# vendor/sm-core/tooling/pins.json with npm. Opens one issue when anything is
+# behind and keeps it up to date; closes it when everything is current. Needs
+# only the calling repo's GITHUB_TOKEN.
+#
+# Caller:
+#   on:
+#     schedule:
+#       - cron: "17 6 * * 1"
+#     workflow_dispatch:
+#   permissions:
+#     contents: read
+#     issues: write
+#   jobs:
+#     behind:
+#       uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.1
+
+on:
+  workflow_call:
+    inputs:
+      vendor-dir:
+        type: string
+        default: vendor/sm-core
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  behind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.vendor-dir }}
+      - name: Compare with the latest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VENDOR: ${{ inputs.vendor-dir }}
+        run: |
+          set -euo pipefail
+          title="sm-core: newer releases are out"
+          have=$(jq -r .version "$VENDOR/manifest.json")
+          latest=$(gh api repos/scottwmacleod/sm-core/releases/latest --jq .tag_name | sed 's/^v//')
+          lines=()
+          if [ "$have" != "$latest" ]; then
+            lines+=("- **sm-core**: this repo has $have, the latest release is [$latest](https://github.com/scottwmacleod/sm-core/releases/tag/v$latest). Sync it from a checkout at that tag: \`node ../sm-core/scripts/sync.mjs $VENDOR\`.")
+          fi
+          if [ -f "$VENDOR/tooling/pins.json" ]; then
+            for pkg in $(jq -r '.npm | keys[]' "$VENDOR/tooling/pins.json"); do
+              pinned=$(jq -r --arg p "$pkg" '.npm[$p]' "$VENDOR/tooling/pins.json")
+              current=$(npm view "$pkg" version 2>/dev/null || echo "$pinned")
+              if [ "$pinned" != "$current" ]; then
+                lines+=("- **$pkg**: pinned at $pinned, npm has $current. Update the pin in sm-core's \`tooling/pins.json\` and \`sm-conventions.md\` after checking the changelog.")
+              fi
+            done
+          fi
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ ${#lines[@]} -eq 0 ]; then
+            echo "Everything is current ($have)."
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --comment "Everything is current again ($have)."
+            fi
+            exit 0
+          fi
+          body=$(printf '%s\n' "Found by the weekly behind-check on $(date -u +%F)." "" "${lines[@]}")
+          echo "$body"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

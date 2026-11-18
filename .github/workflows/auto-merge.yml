@@ -1,9 +1,25 @@
-# M-2: turn on squash auto-merge for every non-draft PR. Merges once required checks pass.
-name: Auto-merge
+name: auto-merge
+
+# Turns on squash auto-merge for every non-draft PR from a branch in the
+# calling repo, so it merges once the required checks pass. Fork PRs and
+# Dependabot PRs are left alone (dependabot-automerge.yml handles those).
+# sm-core runs it on its own PRs too (the pull_request trigger).
+#
+# Caller:
+#   on:
+#     pull_request:
+#       types: [opened, ready_for_review, reopened]
+#   permissions:
+#     contents: write
+#     pull-requests: write
+#   jobs:
+#     auto-merge:
+#       uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.1
 
 on:
   pull_request:
     types: [opened, ready_for_review, reopened]
+  workflow_call:
 
 permissions:
   contents: write
@@ -11,11 +27,17 @@ permissions:
 
 jobs:
   auto-merge:
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'dependabot[bot]'
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

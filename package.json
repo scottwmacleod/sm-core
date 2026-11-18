@@ -1,8 +1,8 @@
 {
   "name": "sm-core",
-  "version": "26.11.0",
+  "version": "26.11.1",
   "private": true,
-  "description": "The sm_ suite's brand core: tokens, generated CSS, marks and icons.",
+  "description": "The sm_ suite's brand and tooling core: tokens, generated CSS, marks, icons and shared engineering files.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node scripts/build.mjs --check",
+    "check": "node scripts/build.mjs --check && node scripts/test-sync.mjs",
     "logos": "node scripts/logos.mjs",
     "sync": "node scripts/sync.mjs"
   },
