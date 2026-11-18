@@ -1,0 +1,271 @@
+name: web-ci
+
+# The sm_ suite's shared CI for a Node web project. Products call it at a
+# pinned tag and add a small `ci` job that the branch rule requires (see the
+# README). Lint, typecheck, unit tests, build and browser tests run as
+# parallel jobs. Each job has a time budget and fails when it runs past it.
+# Rules: no retries, no continue-on-error, no skipped tests. A check that
+# needs a retry has a bug.
+
+on:
+  workflow_call:
+    inputs:
+      workspace:
+        description: Directory holding package.json and package-lock.json, relative to the repo root.
+        type: string
+        default: "."
+      node-version:
+        description: Node version. Empty reads node-version-file.
+        type: string
+        default: ""
+      node-version-file:
+        description: File holding the Node version, relative to the repo root.
+        type: string
+        default: .nvmrc
+      checks:
+        description: Extra commands for the lint job, one per line (e.g. a drift check).
+        type: string
+        default: ""
+      lint-command:
+        description: Format and lint. Empty still runs the job for verify.mjs and `checks`.
+        type: string
+        default: npm run lint
+      typecheck-command:
+        description: Typecheck. `bun check` by default; pass `npx tsc --noEmit` (or the repo's script) as the fallback. Empty skips the job.
+        type: string
+        default: bun check
+      test-command:
+        description: Unit tests (Vitest in random order). Empty skips the job.
+        type: string
+        default: npm test
+      build-command:
+        description: Production build. Empty skips the job.
+        type: string
+        default: npm run build
+      e2e:
+        description: Run browser tests (Playwright with axe).
+        type: boolean
+        default: false
+      e2e-command:
+        type: string
+        default: npm run e2e
+      skip-paths:
+        description: Extended regex. On a PR where every changed file matches, every job is skipped (docs-only PRs). Empty never skips. The caller needs `pull-requests read` permission for this.
+        type: string
+        default: ""
+      bun-version:
+        type: string
+        default: 1.4.4
+      lint-budget-seconds:
+        type: number
+        default: 45
+      typecheck-budget-seconds:
+        type: number
+        default: 45
+      test-budget-seconds:
+        type: number
+        default: 90
+      build-budget-seconds:
+        type: number
+        default: 90
+      e2e-budget-seconds:
+        type: number
+        default: 120
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sm-web-ci-${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    # Decides which jobs run. Needs no checkout: it asks the API for the PR's
+    # files. Fails open: anything other than a docs-only PR runs everything.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      skip: ${{ steps.plan.outputs.skip }}
+    steps:
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          SKIP_PATHS: ${{ inputs.skip-paths }}
+          LINT: ${{ inputs.lint-command }}
+          TYPECHECK: ${{ inputs.typecheck-command }}
+          TEST: ${{ inputs.test-command }}
+          BUILD: ${{ inputs.build-command }}
+          E2E: ${{ inputs.e2e && inputs.e2e-command || '' }}
+          B_LINT: ${{ inputs.lint-budget-seconds }}
+          B_TYPECHECK: ${{ inputs.typecheck-budget-seconds }}
+          B_TEST: ${{ inputs.test-budget-seconds }}
+          B_BUILD: ${{ inputs.build-budget-seconds }}
+          B_E2E: ${{ inputs.e2e-budget-seconds }}
+        run: |
+          skip=false
+          if [ "$EVENT" = pull_request ] && [ -n "$SKIP_PATHS" ]; then
+            if files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename') && [ -n "$files" ]; then
+              echo "Changed files:"; echo "$files"
+              if ! echo "$files" | grep -Ev "$SKIP_PATHS" > /dev/null; then skip=true; fi
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+          # The lint job always runs: it is where verify.mjs and `checks` run.
+          [ -z "$LINT" ] && LINT=true
+          matrix=$(jq -cn \
+            --arg lint "$LINT" --arg typecheck "$TYPECHECK" --arg test "$TEST" --arg build "$BUILD" --arg e2e "$E2E" \
+            --argjson blint "$B_LINT" --argjson btypecheck "$B_TYPECHECK" --argjson btest "$B_TEST" \
+            --argjson bbuild "$B_BUILD" --argjson be2e "$B_E2E" '
+            [ {task: "lint", run: $lint, budget: $blint},
+              {task: "typecheck", run: $typecheck, budget: $btypecheck},
+              {task: "test", run: $test, budget: $btest},
+              {task: "build", run: $build, budget: $bbuild},
+              {task: "e2e", run: $e2e, budget: $be2e} ]
+            | map(select(.run != "")) | {include: .}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "skip=$skip; jobs: $(echo "$matrix" | jq -r '[.include[].task] | join(", ")')"
+
+  check:
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    # A hang guard only. The budget below is the real limit.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.workspace }}
+    steps:
+      - name: Start the clock
+        working-directory: .
+        run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      # Blobless, not shallow: full history, file contents fetched on demand.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          filter: blob:none
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        id: node
+        with:
+          node-version: ${{ inputs.node-version }}
+          node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
+
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ inputs.workspace }}/node_modules
+            ${{ inputs.workspace }}/*/node_modules
+            ${{ inputs.workspace }}/*/*/node_modules
+          key: sm-modules-${{ runner.os }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workspace)) }}
+
+      - name: Install dependencies
+        if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
+
+      # Saved by whichever job installs first; main's runs seed it for every PR.
+      - name: Save node_modules
+        if: steps.modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ inputs.workspace }}/node_modules
+            ${{ inputs.workspace }}/*/node_modules
+            ${{ inputs.workspace }}/*/*/node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
+
+      - name: Set up Bun
+        if: matrix.task == 'typecheck' && startsWith(matrix.run, 'bun ')
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: sm-core copy is untouched
+        if: matrix.task == 'lint' && hashFiles('vendor/sm-core/verify.mjs') != ''
+        working-directory: .
+        run: node vendor/sm-core/verify.mjs
+
+      - name: Extra checks
+        if: matrix.task == 'lint' && inputs.checks != ''
+        env:
+          CHECKS: ${{ inputs.checks }}
+        run: |
+          while IFS= read -r cmd; do
+            [ -z "$cmd" ] && continue
+            echo "::group::$cmd"; bash -eo pipefail -c "$cmd"; echo "::endgroup::"
+          done <<< "$CHECKS"
+
+      - name: Restore Playwright browsers
+        if: matrix.task == 'e2e'
+        id: browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workspace)) }}
+
+      - name: Install Playwright browser
+        if: matrix.task == 'e2e'
+        run: |
+          if [ "${{ steps.browsers.outputs.cache-hit }}" = true ]; then
+            npx playwright install-deps chromium-headless-shell > /dev/null
+          else
+            npx playwright install --with-deps --only-shell chromium
+          fi
+
+      - name: Save Playwright browsers
+        if: matrix.task == 'e2e' && steps.browsers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browsers.outputs.cache-primary-key }}
+
+      - name: ${{ matrix.task }}
+        if: matrix.run != 'true'
+        env:
+          CMD: ${{ matrix.run }}
+        run: bash -eo pipefail -c "$CMD"
+
+      - name: Within budget
+        if: always()
+        working-directory: .
+        env:
+          TASK: ${{ matrix.task }}
+          BUDGET: ${{ matrix.budget }}
+        run: |
+          took=$(( $(date +%s) - SM_STARTED ))
+          echo "$TASK took ${took}s (budget ${BUDGET}s)"
+          echo "| $TASK | ${took}s | ${BUDGET}s |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$took" -gt "$BUDGET" ]; then
+            echo "::error title=Over budget::$TASK took ${took}s, over its ${BUDGET}s budget. Find what got slower; don't raise the budget to hide it."
+            exit 1
+          fi
+
+  result:
+    # One job to depend on. Passes when every planned job passed, or when the
+    # PR only touched skip-paths.
+    needs: [plan, check]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          PLAN: ${{ needs.plan.result }}
+          CHECK: ${{ needs.check.result }}
+        run: |
+          echo "plan: $PLAN, checks: $CHECK"
+          [ "$PLAN" = success ] || { echo "::error::planning failed"; exit 1; }
+          case "$CHECK" in
+            success|skipped) ;;
+            *) echo "::error::a check $CHECK"; exit 1 ;;
+          esac

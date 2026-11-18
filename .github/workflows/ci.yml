@@ -1,5 +1,8 @@
 name: ci
 
+# sm-core runs its own shared workflow, so every change to web-ci.yml is
+# proven here before it's tagged.
+
 on:
   pull_request:
   push:
@@ -7,13 +10,25 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read # lets web-ci list a PR's files for skip-paths
 
 jobs:
-  check:
+  web:
+    uses: ./.github/workflows/web-ci.yml
+    with:
+      lint-command: ""
+      typecheck-command: ""
+      test-command: npm run check
+      build-command: ""
+      skip-paths: '^(README\.md|AGENTS\.md|CLAUDE\.md)$'
+      lint-budget-seconds: 30
+      test-budget-seconds: 45
+
+  # The check to require: passes only when every web-ci job did.
+  ci:
+    needs: web
+    if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-      - run: npm run check
+      - run: test "${{ needs.web.result }}" = success
