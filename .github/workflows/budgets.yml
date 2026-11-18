@@ -14,7 +14,7 @@ name: budgets
 #     pull-requests: write        # for the size comment
 #   jobs:
 #     budgets:
-#       uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.1
+#       uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.2
 #       with:
 #         dist-dir: apps/web/dist
 #         js-kb: 120

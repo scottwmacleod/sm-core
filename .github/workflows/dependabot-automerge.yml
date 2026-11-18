@@ -10,7 +10,7 @@ name: dependabot-automerge
 #     pull-requests: write
 #   jobs:
 #     dependabot:
-#       uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.1
+#       uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.2
 
 on:
   pull_request:
