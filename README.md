@@ -128,8 +128,8 @@ The inputs default to the shared script names (`npm run lint`, `bun check`, `npm
 2. `npm run build` regenerates `dist/` and `VERSION`. It refuses to write if a token name is invalid or a contrast pair fails.
 3. If a mark or a colour used in a mark changed, run `npm run logos` (needs `npm ci` and Playwright's Chromium).
 4. Open a PR. CI runs `npm run check`, which fails if `dist/` is stale.
-5. After merge, tag the release (`v26.12`) and sync it into each product.
+5. Merging the PR tags the release (`v26.12`) and publishes it on GitHub automatically (`release.yml`, whenever `VERSION` changes on `main`). Then sync it into each product.
 
-Tooling changes follow the same path: edit `tooling/`, bump `version` in `tokens.json` (`26.11.2`), run `npm run build`, open a PR, then tag and sync.
+Tooling changes follow the same path: edit `tooling/`, bump `version` in `tokens.json` (`26.11.2`), run `npm run build` and open a PR. Merging tags and releases it; then sync.
 
 Node 22. `build`, `check` and `sync` have no dependencies; only `logos` needs `npm ci`. `check` also runs `scripts/test-sync.mjs`, which syncs into a throwaway repo and proves `verify.mjs` catches edits.
