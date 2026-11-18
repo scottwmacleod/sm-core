@@ -29,7 +29,7 @@ Sync a release into the product, then commit the copy:
 
 ```sh
 # in a checkout of sm-core, at the release you want
-git checkout v26.11.2
+git checkout v26.11.3
 # from the product repo's root
 node ../sm-core/scripts/sync.mjs vendor/sm-core
 ```
@@ -94,6 +94,8 @@ Reusable workflows in `.github/workflows/`. A product calls them at a release ta
 | `audit.yml` | `npm audit --audit-level=high`. Not a required check. |
 | `behind.yml` | Weekly: opens one issue when `vendor/sm-core` is older than sm-core's latest release, or a tool in `tooling/pins.json` has a newer version on npm. Closes it when everything is current. |
 
+One catch: a PR merged by `auto-merge.yml` is merged with `GITHUB_TOKEN`, and GitHub starts no workflows for that push to `main`. So anything that must run on `main` also needs a `schedule` (sm-core's `release.yml` runs hourly; `budgets.yml` callers refresh main's sizes daily). A PR whose auto-merge an agent or person turned on with their own account is unaffected.
+
 Each workflow's header has a caller example. The product's main workflow looks like this, with one required check named `ci`:
 
 ```yaml
@@ -107,7 +109,7 @@ permissions:
   pull-requests: read   # for skip-paths
 jobs:
   web:
-    uses: scottwmacleod/sm-core/.github/workflows/web-ci.yml@v26.11.2
+    uses: scottwmacleod/sm-core/.github/workflows/web-ci.yml@v26.11.3
     with:
       e2e: true
       skip-paths: '^(docs/|[^/]+\.md$)'
@@ -120,7 +122,7 @@ jobs:
       - run: test "${{ needs.web.result }}" = success
 ```
 
-The inputs default to the shared script names (`npm run lint`, `bun check`, `npm test`, `npm run build`, `npm run e2e`) and to Node from `.nvmrc`. Pass an empty string to drop a job. sm-core's own `ci.yml` runs `web-ci.yml` from the same commit, so a change to it is proven before it's tagged.
+The inputs default to the shared script names (`npm run lint`, `bun check --no-script`, `npm test`, `npm run build`, `npm run e2e`) and to Node from `.nvmrc`. Pass an empty string to drop a job. sm-core's own `ci.yml` runs `web-ci.yml` from the same commit, so a change to it is proven before it's tagged.
 
 ## Changing the brand
 
