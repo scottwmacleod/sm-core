@@ -1,0 +1,46 @@
+name: release
+
+# Tags and releases sm-core whenever VERSION changes on main. Bump `version`
+# in tokens.json, run `npm run build`, merge the PR, and this creates tag
+# v<VERSION> on the merge commit plus a GitHub release with generated notes.
+# Agent sessions can't push tags, so this is how releases happen.
+# Run it by hand (Actions > release > Run workflow) to release the current
+# VERSION if a run was missed. It does nothing when the tag already exists.
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(gh api "repos/$GITHUB_REPOSITORY/contents/VERSION?ref=$GITHUB_SHA" \
+            -H "Accept: application/vnd.github.raw" | tr -d '[:space:]')
+          if ! [[ "$version" =~ ^[0-9]{2}\.(0[1-9]|1[0-2])(\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::VERSION '$version' is not CalVer YY.MM or YY.MM.N"
+            exit 1
+          fi
+          tag="v$version"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > /dev/null 2>&1; then
+            echo "$tag already exists. Nothing to do."
+            exit 0
+          fi
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$tag" --generate-notes --latest
+          echo "Released $tag at $GITHUB_SHA"
