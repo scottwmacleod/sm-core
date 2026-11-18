@@ -9,12 +9,14 @@ name: budgets
 #     pull_request:
 #     push:
 #       branches: [main]          # main's runs record the "before" sizes
+#     schedule:
+#       - cron: "41 4 * * *"      # also daily: auto-merged pushes start no runs
 #   permissions:
 #     contents: read
 #     pull-requests: write        # for the size comment
 #   jobs:
 #     budgets:
-#       uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.2
+#       uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.3
 #       with:
 #         dist-dir: apps/web/dist
 #         js-kb: 120

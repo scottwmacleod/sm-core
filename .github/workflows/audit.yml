@@ -15,7 +15,7 @@ name: audit
 #     contents: read
 #   jobs:
 #     audit:
-#       uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.2
+#       uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.3
 
 on:
   workflow_call:

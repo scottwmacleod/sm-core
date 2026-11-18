@@ -6,11 +6,17 @@ name: release
 # Agent sessions can't push tags, so this is how releases happen.
 # Run it by hand (Actions > release > Run workflow) to release the current
 # VERSION if a run was missed. It does nothing when the tag already exists.
+#
+# The hourly run is the catch-up: a PR merged by auto-merge.yml is merged
+# with GITHUB_TOKEN, and GitHub starts no workflows for that push, so the
+# push trigger never fires for it (seen with #14 on 18 Nov 2026).
 
 on:
   push:
     branches: [main]
     paths: [VERSION]
+  schedule:
+    - cron: "23 * * * *"
   workflow_dispatch:
 
 permissions:

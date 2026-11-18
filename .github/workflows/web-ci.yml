@@ -31,9 +31,9 @@ on:
         type: string
         default: npm run lint
       typecheck-command:
-        description: Typecheck. `bun check` by default; pass `npx tsc --noEmit` (or the repo's script) as the fallback. Empty skips the job.
+        description: Typecheck. `bun check --no-script` by default (without --no-script, bun runs a package's `check` script instead of typechecking); pass `npx tsc --noEmit` (or the repo's script) as the fallback. Empty skips the job.
         type: string
-        default: bun check
+        default: bun check --no-script
       test-command:
         description: Unit tests (Vitest in random order). Empty skips the job.
         type: string
