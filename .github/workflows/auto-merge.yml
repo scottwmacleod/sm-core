@@ -9,6 +9,12 @@ name: auto-merge
 # gets auto-merge. Adding the label turns auto-merge off; removing it turns
 # it back on. A person merges a held PR, or removes the label.
 #
+# Merge token: with the GITHUB_TOKEN, the squash merge starts no workflows on
+# main (deploys, releases, main's CI). Pass a fine-grained token as
+# `merge-token` and auto-merge is turned on with it, so the merge does start
+# them. sm-core's own PRs read the repo secret SM_MERGE_TOKEN. Without either,
+# it falls back to the GITHUB_TOKEN.
+#
 # Caller:
 #   on:
 #     pull_request:
@@ -21,6 +27,8 @@ name: auto-merge
 #       uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.3
 #       # with:
 #       #   hold-label: hold
+#       secrets:
+#         merge-token: ${{ secrets.SM_MERGE_TOKEN }}
 
 on:
   pull_request:
@@ -31,6 +39,10 @@ on:
         description: A PR with this label never gets auto-merge.
         type: string
         default: hold
+    secrets:
+      merge-token:
+        description: Fine-grained token that turns on auto-merge, so the merge starts workflows on main.
+        required: false
 
 permissions:
   contents: write
@@ -61,7 +73,7 @@ jobs:
       - name: Hold or auto-merge
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.merge-token || secrets.SM_MERGE_TOKEN || github.token }}
           HELD: ${{ contains(github.event.pull_request.labels.*.name, inputs.hold-label || 'hold') }}
           HOLD_LABEL: ${{ inputs.hold-label || 'hold' }}
         run: |
