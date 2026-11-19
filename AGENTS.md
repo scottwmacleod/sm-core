@@ -5,7 +5,7 @@ Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin
 ## Commands
 
 - Build: `npm run build` (regenerates `dist/` and `VERSION` from `tokens.json`)
-- Check: `npm run check` (CI gate: `dist/` is current, token names and the version are valid, every contrast pair passes, and sync plus verify work on a throwaway repo)
+- Check: `npm run check` (CI gate: `dist/` is current, token names and the version are valid, every contrast pair passes, and sync plus verify work on a throwaway repo, and the PostHog loader passes its checks)
 - Logos: `npm ci && npm run logos` (regenerates `dist/logos`; needs Playwright's Chromium)
 
 ## Rules

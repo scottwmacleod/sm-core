@@ -17,6 +17,7 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `tooling/github/` | The PR template and the bug and feature issue forms. Sync installs them into `.github/`. |
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
 | `tooling/hooks/` | The pre-push hook (format, lint and typecheck on changed files) and `install.mjs`, which points git at it. |
+| `tooling/analytics/sm-posthog.js` | The PostHog loader: queues calls, loads PostHog's script once the page is idle, and serves flags without flicker. See **PostHog**. |
 | `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
 | `.github/workflows/` | The shared CI, called by products at a release tag. See **Shared CI**. |
 | `VERSION` | The release, CalVer `YY.MM`, plus `.N` for a second release in the same month (`26.11.1`). |
@@ -80,6 +81,33 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 Products self-host Geist and Geist Mono however their stack does it (a woff2 file, `next/font`, `@fontsource`). Never load them from a font CDN.
 
 Product-only tokens use the product's own prefix (`--rollin-size-roll-row`) and never redefine an `--sm-*` value.
+
+## PostHog
+
+The suite shares one PostHog project, `sm_` (US cloud). Its key (`phc_…`) is public by design, so it lives in code. Every event carries a `product` property. The plan is in #21.
+
+Never install `posthog-js`: its script is about 120 kB gzipped. The loader is about 1.3 kB gzipped and fetches PostHog's script through the product's own domain once the page is idle, or on the first tap or key press. Nothing loads when the visitor sends Global Privacy Control or Do Not Track. There are no cookies (PostHog keeps its id in localStorage) and replay masks every input.
+
+```js
+import { capture, flag, onFlags, startPostHog } from "../vendor/sm-core/tooling/analytics/sm-posthog.js";
+
+startPostHog({ token: "phc_…", product: "rollin" });          // add flags: true on a page that runs an experiment
+flag("hero-copy");             // the variant, synchronously; undefined means show control
+onFlags(() => render());       // fresh values arrived
+capture("rolled", { dice: 2 }); // a custom event
+```
+
+`flags: true` asks PostHog for the visitor's variants straight away and caches them, so the next visit renders the right variant at first paint. `flag()` records the exposure once per page, which experiment results need. `options` passes straight to `posthog.init` (for example `{ mask_all_text: true }`). After PostHog loads, `window.posthog` is the full SDK.
+
+Proxy PostHog through the product's domain, so blockers miss it and the CSP stays `'self'`. In `vercel.json`, before any catch-all rewrite:
+
+```json
+{ "source": "/_sm/static/:path*", "destination": "https://us-assets.i.posthog.com/static/:path*" },
+{ "source": "/_sm/array/:path*", "destination": "https://us-assets.i.posthog.com/array/:path*" },
+{ "source": "/_sm/:path*", "destination": "https://us.i.posthog.com/:path*" }
+```
+
+A service worker must leave `/_sm/` to the network. Plain HTML serves a copy of the loader under a name blockers don't match (the site uses `/sm.js`) and checks it against the vendor copy.
 
 ## Shared CI
 
