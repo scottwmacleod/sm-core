@@ -86,15 +86,16 @@ Product-only tokens use the product's own prefix (`--rollin-size-roll-row`) and 
 
 The suite shares one PostHog project, `sm_` (US cloud). Its key (`phc_…`) is public by design, so it lives in code. Every event carries a `product` property. The plan is in #21.
 
-Never install `posthog-js`: its script is about 120 kB gzipped. The loader is about 1.3 kB gzipped and fetches PostHog's script through the product's own domain once the page is idle, or on the first tap or key press. Nothing loads when the visitor sends Global Privacy Control or Do Not Track. There are no cookies (PostHog keeps its id in localStorage) and replay masks every input.
+Never install `posthog-js`: its script is about 120 kB gzipped. The loader is about 1.4 kB gzipped and fetches PostHog's script through the product's own domain once the page is idle, or on the first tap or key press. It also turns on PostHog's error tracking and Core Web Vitals; their code (about 6 kB and 7 kB gzipped) loads from the same host after PostHog, never from the bundle. Errors thrown before PostHog loads are queued. Nothing loads when the visitor sends Global Privacy Control or Do Not Track. There are no cookies (PostHog keeps its id in localStorage) and replay masks every input.
 
 ```js
-import { capture, flag, onFlags, startPostHog } from "../vendor/sm-core/tooling/analytics/sm-posthog.js";
+import { capture, captureException, flag, onFlags, startPostHog } from "../vendor/sm-core/tooling/analytics/sm-posthog.js";
 
 startPostHog({ token: "phc_…", product: "rollin" });          // add flags: true on a page that runs an experiment
 flag("hero-copy");             // the variant, synchronously; undefined means show control
 onFlags(() => render());       // fresh values arrived
 capture("rolled", { dice: 2 }); // a custom event
+captureException(error);        // a caught error, e.g. in a React error boundary
 ```
 
 `flags: true` asks PostHog for the visitor's variants straight away and caches them, so the next visit renders the right variant at first paint. `flag()` records the exposure once per page, which experiment results need. `options` passes straight to `posthog.init` (for example `{ mask_all_text: true }`). After PostHog loads, `window.posthog` is the full SDK.
@@ -106,6 +107,8 @@ Proxy PostHog through the product's domain, so blockers miss it and the CSP stay
 { "source": "/_sm/array/:path*", "destination": "https://us-assets.i.posthog.com/array/:path*" },
 { "source": "/_sm/:path*", "destination": "https://us.i.posthog.com/:path*" }
 ```
+
+For readable stack traces, build with public source maps (Vite: `build: { sourcemap: true }`). PostHog fetches them from the deployed site, so there's nothing to upload. A private repo that can't publish its source uploads them with `posthog-cli` instead.
 
 A service worker must leave `/_sm/` to the network. Plain HTML serves a copy of the loader under a name blockers don't match (the site uses `/sm.js`) and checks it against the vendor copy.
 
