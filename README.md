@@ -119,7 +119,7 @@ Reusable workflows in `.github/workflows/`. A product calls them at a release ta
 | Workflow | What it does |
 | --- | --- |
 | `web-ci.yml` | Lint (plus `verify.mjs` and any extra `checks`), typecheck, unit tests, build and optional Playwright, as parallel jobs. Blobless clone, `node_modules` and Playwright browsers cached, superseded PR runs cancelled, docs-only PRs skipped via `skip-paths`. Each job has a time budget (`*-budget-seconds`) and fails when it runs over. |
-| `budgets.yml` | Builds once, then checks gzipped JS and CSS against `js-kb` and `css-kb` (one size comment per PR, with main's last sizes as "before") and runs Lighthouse against the build or a `lighthouse-url`. Defaults match the site: accessibility 0.95, the rest 0.90. |
+| `budgets.yml` | Builds once, then checks gzipped JS and CSS against `js-kb` and `css-kb` (one size comment per PR, with main's last sizes as "before") and runs Lighthouse against the build or a `lighthouse-url`. Lighthouse runs once; if a score misses, it runs `lighthouse-retry-runs` (3) more times and asserts on the median, so one slow runner can't fail a PR (the retry's time isn't counted against `budget-seconds`). `lighthouse-skip-pages` leaves pages out, e.g. `/404.html`. Defaults match the site: accessibility 0.95, the rest 0.90. |
 | `auto-merge.yml` | Squash auto-merge for non-draft PRs from the repo's own branches. A PR labelled `hold` (the `hold-label` input) is left for a person: adding the label turns auto-merge off, removing it turns it back on. |
 | `dependabot-automerge.yml` | Auto-merge for Dependabot minor and patch updates. Majors wait for Scott. |
 | `audit.yml` | `npm audit --audit-level=high`. Not a required check. |

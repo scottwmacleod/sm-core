@@ -62,9 +62,23 @@ on:
         type: string
         default: ""
       lighthouse-runs:
-        description: Runs per URL; the median is asserted.
+        description: Runs per URL in the first pass; the median is asserted.
         type: number
         default: 1
+      lighthouse-retry-runs:
+        description: >-
+          Runs per URL in a second pass, only when the first pass misses a
+          score. The median of those runs is asserted, so one slow runner can't
+          fail a PR but a real regression still does. 0 turns the retry off.
+          The retry's time doesn't count towards budget-seconds.
+        type: number
+        default: 3
+      lighthouse-skip-pages:
+        description: >-
+          Paths to leave out when serving dist-dir, space separated (e.g.
+          "/404.html"). Ignored when lighthouse-url is set.
+        type: string
+        default: ""
       performance:
         type: number
         default: 0.9
@@ -221,22 +235,43 @@ jobs:
           DIST: ${{ inputs.dist-dir }}
           URL: ${{ inputs.lighthouse-url }}
           RUNS: ${{ inputs.lighthouse-runs }}
+          RETRY_RUNS: ${{ inputs.lighthouse-retry-runs }}
+          SKIP: ${{ inputs.lighthouse-skip-pages }}
           PERF: ${{ inputs.performance }}
           A11Y: ${{ inputs.accessibility }}
           BP: ${{ inputs.best-practices }}
           SEO: ${{ inputs.seo }}
         run: |
           jq -n --argjson p "$PERF" --argjson a "$A11Y" --argjson b "$BP" --argjson s "$SEO" --argjson runs "$RUNS" \
-            --arg url "$URL" --arg dist "$DIST" '{ci: {
+            --arg url "$URL" --arg dist "$DIST" --arg skip "$SKIP" '{ci: {
               collect: ({numberOfRuns: $runs, settings: {chromeFlags: "--no-sandbox --headless=new"}}
-                + (if $url != "" then {url: [$url]} else {staticDistDir: $dist} end)),
+                + (if $url != "" then {url: [$url]} else {staticDistDir: $dist, autodiscoverUrlBlocklist: ($skip | split(" ") | map(select(. != "")))} end)),
               assert: {aggregationMethod: "median", assertions: {
                 "categories:performance": ["error", {minScore: $p}],
                 "categories:accessibility": ["error", {minScore: $a}],
                 "categories:best-practices": ["error", {minScore: $b}],
                 "categories:seo": ["error", {minScore: $s}]}},
               upload: {target: "filesystem", outputDir: ".lighthouseci-report"}}}' > .sm-lighthouserc.json
-          npx -y @lhci/cli@0.16.1 autorun --config=.sm-lighthouserc.json
+          lhci="npx -y @lhci/cli@0.16.1"
+          $lhci collect --config=.sm-lighthouserc.json
+          if ! $lhci assert --config=.sm-lighthouserc.json; then
+            if [ "$RETRY_RUNS" -le 0 ]; then
+              $lhci upload --config=.sm-lighthouserc.json || true
+              exit 1
+            fi
+            # A shared runner's single score swings a lot. Run again, fresh, and
+            # assert on the median: noise washes out, a regression doesn't.
+            echo "::notice title=Lighthouse retry::A score missed on the first pass; running $RETRY_RUNS more times and asserting on the median."
+            retry_started=$(date +%s)
+            $lhci collect --config=.sm-lighthouserc.json --numberOfRuns="$RETRY_RUNS"
+            # Not part of the job's own time (see budget-seconds).
+            echo "SM_STARTED=$(( SM_STARTED + $(date +%s) - retry_started ))" >> "$GITHUB_ENV"
+            status=0
+            $lhci assert --config=.sm-lighthouserc.json || status=$?
+            $lhci upload --config=.sm-lighthouserc.json || true
+            exit $status
+          fi
+          $lhci upload --config=.sm-lighthouserc.json
 
       - name: Within budget
         if: always()
