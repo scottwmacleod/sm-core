@@ -54,12 +54,12 @@ export function css(doc) {
   const reduced = doc.motion.tokens.filter((t) => t.reduced !== undefined);
   o += "@media (prefers-reduced-motion: reduce) {\n  :root {\n";
   for (const t of reduced) o += `    ${P}${t.name}: ${t.reduced};\n`;
-  o += "  }\n  .sm-cursor { animation: none; }\n}\n\n";
+  o += "  }\n}\n\n";
 
   o += "@media (prefers-contrast: more) {\n";
   o += `  :root { ${P}ink-muted: var(${P}ink); ${P}line: var(${P}control-line); ${P}line-strong: var(${P}control-line); }\n}\n\n`;
 
-  o += `@media print {\n  :root {\n${colourBlock(doc, "light", "    ")}  }\n  .sm-cursor { animation: none; }\n}\n\n`;
+  o += `@media print {\n  :root {\n${colourBlock(doc, "light", "    ")}  }\n}\n\n`;
 
   o += `/* The mark: a lowercase name in Geist Mono 600 and the lime cursor.
    <span class="sm-mark">sm<span class="sm-cursor" aria-hidden="true"></span></span> */
@@ -111,8 +111,31 @@ export function css(doc) {
   .sm-cursor { background: CanvasText; }
   .sm-credit { border-color: LinkText; }
 }
+
+/* Still on screen under reduced motion, and in print. These come after
+   .sm-cursor so they win. */
+@media (prefers-reduced-motion: reduce) {
+  .sm-cursor { animation: none; }
+}
+
+@media print {
+  .sm-cursor { animation: none; }
+}
 `;
   return o;
+}
+
+// A media-query override only wins when it comes after the rule it overrides,
+// because both have the same specificity.
+export function orderProblems(text) {
+  const base = text.indexOf("\n.sm-cursor {");
+  const out = [];
+  for (const m of text.matchAll(/\.sm-cursor \{ animation: none; \}/g)) {
+    if (base === -1 || m.index < base) {
+      out.push("dist/sm-core.css turns the cursor blink off before .sm-cursor sets it, so reduced motion and print still blink");
+    }
+  }
+  return out;
 }
 
 export function tailwind(doc) {
@@ -190,7 +213,7 @@ function main() {
     "dist/sm-tailwind.css": tailwind(doc),
     VERSION: `${doc.version}\n`,
   };
-  const issues = problems(doc);
+  const issues = [...problems(doc), ...orderProblems(files["dist/sm-core.css"])];
   if (process.argv.includes("--check")) {
     for (const [path, want] of Object.entries(files)) {
       let have = "";
