@@ -109,6 +109,8 @@ for (const nav of [{ globalPrivacyControl: true }, { doNotTrack: "1" }]) {
   check("no cookies", config?.persistence === "localStorage");
   check("inputs masked in replay", config?.session_recording?.maskAllInputs === true);
   check("api host is the proxy", config?.api_host === "/_sm");
+  check("exceptions captured", config?.capture_exceptions === true);
+  check("web vitals captured", config?.capture_performance?.web_vitals === true);
   p.listeners.pointerdown?.forEach((f) => f());
   await p.settle();
   check("script loads only once", p.appended.length === 1);
@@ -162,6 +164,30 @@ for (const nav of [{ globalPrivacyControl: true }, { doNotTrack: "1" }]) {
   const p = await page({ storage: { sm_ph_flags: JSON.stringify({ hero: "test" }) } });
   p.mod.startPostHog({ token: "phc_x", product: "site", flags: true });
   check("cached variant available synchronously", p.mod.flag("hero") === "test");
+}
+
+// Errors before PostHog loads are queued, then left to PostHog once it has loaded.
+{
+  const p = await page({ ready: "loading" });
+  p.mod.startPostHog({ token: "phc_x", product: "site" });
+  const boom = new Error("boom");
+  p.listeners.error.forEach((f) => f({ error: boom }));
+  p.listeners.unhandledrejection.forEach((f) => f({ reason: "nope" }));
+  const queued = globalThis.posthog.filter(([m]) => m === "captureException");
+  check("early error queued", queued[0]?.[1] === boom);
+  check("early rejection queued", queued[1]?.[1] === "nope");
+  p.mod.captureException(boom, { where: "boundary" });
+  check(
+    "captureException is queued with properties",
+    globalThis.posthog.at(-1)?.[2]?.where === "boundary",
+  );
+  const q = globalThis.posthog;
+  globalThis.posthog = { captureException: () => {} }; // PostHog has loaded
+  p.listeners.error.forEach((f) => f({ error: boom }));
+  check(
+    "no early capture once PostHog has loaded",
+    q.filter(([m]) => m === "captureException").length === 3,
+  );
 }
 
 if (failures.length) {
