@@ -94,7 +94,7 @@ Reusable workflows in `.github/workflows/`. A product calls them at a release ta
 | `audit.yml` | `npm audit --audit-level=high`. Not a required check. |
 | `behind.yml` | Weekly: opens one issue when `vendor/sm-core` is older than sm-core's latest release, or a tool in `tooling/pins.json` has a newer version on npm. Closes it when everything is current. |
 
-One catch: a PR merged by `auto-merge.yml` is merged with `GITHUB_TOKEN`, and GitHub starts no workflows for that push to `main`. So anything that must run on `main` also needs a `schedule` (sm-core's `release.yml` runs hourly; `budgets.yml` callers refresh main's sizes daily). A PR whose auto-merge an agent or person turned on with their own account is unaffected.
+Merges and `main`: a PR merged with `GITHUB_TOKEN` starts no workflows for that push to `main`. So each caller of `auto-merge.yml` passes the repo secret `SM_MERGE_TOKEN` as `merge-token`: a fine-grained token for Scott's account with Contents, Pull requests and Workflows set to read and write on the four sm_ repos. Auto-merge is turned on with it, so the merge starts deploys, releases and `main`'s CI. Without the secret it falls back to `GITHUB_TOKEN`, which is why `release.yml` still runs hourly and `budgets.yml` callers refresh `main`'s sizes daily. Dependabot PRs can't read Actions secrets, so their merges still start nothing.
 
 Each workflow's header has a caller example. The product's main workflow looks like this, with one required check named `ci`:
 
