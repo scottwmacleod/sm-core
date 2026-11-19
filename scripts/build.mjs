@@ -40,6 +40,13 @@ export function css(doc) {
   o += `@media (prefers-color-scheme: light) {\n  :root:not([data-theme="dark"]) {\n${colourBlock(doc, "light", "    ")}  }\n}\n\n`;
   o += `[data-theme="light"] {\n${colourBlock(doc, "light", "  ")}}\n\n`;
 
+  // Metric-matched fallbacks: a local system font scaled to Geist's widths and
+  // line metrics, so the swap to the real font shifts no text.
+  for (const f of doc.type.fallbacks) {
+    o += `@font-face {\n  font-family: "${f.family}";\n  src: ${f.local.map((n) => `local("${n}")`).join(", ")};\n`;
+    o += `  size-adjust: ${f.sizeAdjust};\n  ascent-override: ${f.ascent};\n  descent-override: ${f.descent};\n  line-gap-override: ${f.lineGap};\n}\n\n`;
+  }
+
   o += ":root {\n";
   for (const [name, fam] of Object.entries(doc.type.families)) o += `  ${P}font-${name}: ${fam};\n`;
   for (const t of [...doc.spacing.tokens, ...doc.radius.tokens, ...doc.motion.tokens]) {
@@ -175,6 +182,12 @@ export function problems(doc) {
   // CalVer: YY.MM, plus .N for a second release in the same month.
   if (!/^\d{2}\.(0[1-9]|1[0-2])(\.[1-9]\d*)?$/.test(String(doc.version))) {
     out.push(`version "${doc.version}" must be YY.MM or YY.MM.N`);
+  }
+  // Every fallback face must be used by a family stack, or it does nothing.
+  for (const f of doc.type.fallbacks) {
+    if (!Object.values(doc.type.families).some((stack) => stack.includes(`"${f.family}"`))) {
+      out.push(`fallback font "${f.family}" is in no family stack`);
+    }
   }
   const names = [
     ...doc.color.tokens,

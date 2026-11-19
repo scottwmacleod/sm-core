@@ -78,7 +78,7 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
   <span class="sm-mark">sm<span class="sm-cursor" aria-hidden="true"></span></span></a>
 ```
 
-Products self-host Geist and Geist Mono however their stack does it (a woff2 file, `next/font`, `@fontsource`). Never load them from a font CDN.
+Products self-host Geist and Geist Mono however their stack does it (a woff2 file, `next/font`, `@fontsource`). Never load them from a font CDN. `sm-core.css` also defines `Geist Fallback` and `Geist Mono Fallback` (Arial and Courier New scaled to Geist's metrics) and puts them in the `--sm-font-*` stacks, so the swap to the real font doesn't shift text. Use the stacks, not a bare `Geist`.
 
 Product-only tokens use the product's own prefix (`--rollin-size-roll-row`) and never redefine an `--sm-*` value.
 
