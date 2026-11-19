@@ -103,10 +103,12 @@ captureException(error);        // a caught error, e.g. in a React error boundar
 Proxy PostHog through the product's domain, so blockers miss it and the CSP stays `'self'`. In `vercel.json`, before any catch-all rewrite:
 
 ```json
-{ "source": "/_sm/static/:path*", "destination": "https://us-assets.i.posthog.com/static/:path*" },
-{ "source": "/_sm/array/:path*", "destination": "https://us-assets.i.posthog.com/array/:path*" },
-{ "source": "/_sm/:path*", "destination": "https://us.i.posthog.com/:path*" }
+{ "source": "/_sm/static/:path(.*)", "destination": "https://us-assets.i.posthog.com/static/:path" },
+{ "source": "/_sm/array/:path(.*)", "destination": "https://us-assets.i.posthog.com/array/:path" },
+{ "source": "/_sm/:path(.*)", "destination": "https://us.i.posthog.com/:path" }
 ```
+
+Use `:path(.*)`, not `:path*`. PostHog posts events to paths that end in a slash (`/e/`, `/i/v0/e/`), and Vercel's `:path*` doesn't match a trailing slash: the request falls through to a 404, or to an SPA catch-all that answers 405, and no event arrives.
 
 For readable stack traces, build with public source maps (Vite: `build: { sourcemap: true }`). PostHog fetches them from the deployed site, so there's nothing to upload. A private repo that can't publish its source uploads them with `posthog-cli` instead.
 
