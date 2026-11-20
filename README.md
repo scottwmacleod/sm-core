@@ -159,7 +159,7 @@ The inputs default to the shared script names (`npm run lint`, `bun check --no-s
 
 ### Bun products
 
-rollin and planning-poker use Bun as package manager and runtime. Set `packageManager` in `package.json` (`"bun@1.4.4"`): the workflows read the version from it. Commit `bun.lock` and delete `package-lock.json`. Then pass `package-manager: bun` to `web-ci.yml`, `budgets.yml` and `audit.yml`:
+rollin and planning-poker use Bun as package manager and runtime. Set `packageManager` in `package.json` (`"bun@1.4.5"`): the workflows read the version from it. Commit `bun.lock` and delete `package-lock.json`. Then pass `package-manager: bun` to `web-ci.yml`, `budgets.yml` and `audit.yml`:
 
 ```yaml
 jobs:
@@ -180,7 +180,7 @@ With `bun`, each job sets up Bun from `packageManager` (`bun-version` is the fal
 Vercel's bundled Bun (1.3.14) can't read a Bun 1.4 `bun.lock`, so install the pinned Bun first in `vercel.json`:
 
 ```json
-"installCommand": "curl -fsSL https://bun.sh/install | bash -s bun-v1.4.4 && ~/.bun/bin/bun install --frozen-lockfile",
+"installCommand": "curl -fsSL https://bun.sh/install | bash -s bun-v1.4.5 && ~/.bun/bin/bun install --frozen-lockfile",
 "buildCommand": "~/.bun/bin/bun --bun run build"
 ```
 

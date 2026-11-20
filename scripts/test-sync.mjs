@@ -54,7 +54,7 @@ try {
   expect("fresh sync", true);
   // A Bun product (rollin, planning-poker) has bun.lock and packageManager.
   expect("Bun product", true, () => {
-    writeFileSync(at("package.json"), JSON.stringify({ name: "product", private: true, packageManager: "bun@1.4.4" }));
+    writeFileSync(at("package.json"), JSON.stringify({ name: "product", private: true, packageManager: "bun@1.4.5" }));
     writeFileSync(at("bun.lock"), "{}\n");
   });
   expect("product text below the marker", true, () => appendFileSync(at(PR), "\n- [ ] Works on a phone\n"));

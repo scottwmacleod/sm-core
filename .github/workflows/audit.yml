@@ -32,7 +32,7 @@ on:
         default: npm
       bun-version:
         type: string
-        default: 1.4.4
+        default: 1.4.5
       audit-level:
         type: string
         default: high
