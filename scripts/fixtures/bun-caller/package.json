@@ -3,7 +3,7 @@
   "private": true,
   "description": "A minimal Bun product. sm-core's CI runs web-ci.yml on it with package-manager: bun.",
   "type": "module",
-  "packageManager": "bun@1.4.4",
+  "packageManager": "bun@1.4.5",
   "workspaces": ["packages/*"],
   "dependencies": {
     "greet": "workspace:*"

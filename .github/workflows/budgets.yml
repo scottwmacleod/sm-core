@@ -40,7 +40,7 @@ on:
       bun-version:
         description: Bun for a bun product whose package.json has no `packageManager` of `bun@…`.
         type: string
-        default: 1.4.4
+        default: 1.4.5
       node-version:
         description: Node version. Empty reads node-version-file.
         type: string
