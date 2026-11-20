@@ -1,0 +1,19 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bun-caller",
+      "dependencies": {
+        "greet": "workspace:*",
+      },
+    },
+    "packages/greet": {
+      "name": "greet",
+      "version": "0.0.0",
+    },
+  },
+  "packages": {
+    "greet": ["greet@workspace:packages/greet"],
+  }
+}

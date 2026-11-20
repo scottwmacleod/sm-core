@@ -1,0 +1,16 @@
+{
+  "name": "bun-caller",
+  "private": true,
+  "description": "A minimal Bun product. sm-core's CI runs web-ci.yml on it with package-manager: bun.",
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "greet": "workspace:*"
+  },
+  "scripts": {
+    "lint": "bun check-bun.js",
+    "test": "bun ../../test-sync.mjs",
+    "build": "bun build index.js --outdir dist"
+  }
+}

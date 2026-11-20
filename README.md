@@ -124,7 +124,7 @@ Reusable workflows in `.github/workflows/`. A product calls them at a release ta
 | `budgets.yml` | Builds once, then checks gzipped JS and CSS against `js-kb` and `css-kb` (one size comment per PR, with main's last sizes as "before") and runs Lighthouse against the build or a `lighthouse-url`. Lighthouse runs once; if a score misses, it runs `lighthouse-retry-runs` (3) more times and asserts on the median, so one slow runner can't fail a PR (the retry's time isn't counted against `budget-seconds`). `lighthouse-skip-pages` leaves pages out, e.g. `/404.html`. Defaults match the site: accessibility 0.95, the rest 0.90. |
 | `auto-merge.yml` | Squash auto-merge for non-draft PRs from the repo's own branches. A PR labelled `hold` (the `hold-label` input) is left for a person: adding the label turns auto-merge off, removing it turns it back on. Callers list `synchronize` in their trigger types, so a PR opened with a merge conflict gets auto-merge once a push resolves it. |
 | `dependabot-automerge.yml` | Auto-merge for Dependabot minor and patch updates. Majors wait for Scott. |
-| `audit.yml` | `npm audit --audit-level=high`. Not a required check. |
+| `audit.yml` | `npm audit --audit-level=high`, or `bun audit` with `package-manager: bun`. Not a required check. |
 | `behind.yml` | Weekly: opens one issue when `vendor/sm-core` is older than sm-core's latest release, or a tool in `tooling/pins.json` has a newer version on npm. Closes it when everything is current. |
 
 Merges and `main`: a PR merged with `GITHUB_TOKEN` starts no workflows for that push to `main`. So each caller of `auto-merge.yml` passes the repo secret `SM_MERGE_TOKEN` as `merge-token`: a fine-grained token for Scott's account with Contents, Pull requests and Workflows set to read and write on the four sm_ repos. Auto-merge is turned on with it, so the merge starts deploys, releases and `main`'s CI. Without the secret it falls back to `GITHUB_TOKEN`, which is why `release.yml` still runs hourly and `budgets.yml` callers refresh `main`'s sizes daily. Dependabot PRs can't read Actions secrets, so their merges still start nothing.
@@ -155,7 +155,36 @@ jobs:
       - run: test "${{ needs.web.result }}" = success
 ```
 
-The inputs default to the shared script names (`npm run lint`, `bun check --no-script`, `npm test`, `npm run build`, `npm run e2e`) and to Node from `.nvmrc`. Pass an empty string to drop a job. sm-core's own `ci.yml` runs `web-ci.yml` from the same commit, so a change to it is proven before it's tagged.
+The inputs default to the shared script names (`npm run lint`, `bun check --no-script`, `npm test`, `npm run build`, `npm run e2e`) and to Node from `.nvmrc`. Pass an empty string to drop a job. sm-core's own `ci.yml` runs `web-ci.yml` from the same commit, as an npm caller and as a Bun caller (`scripts/fixtures/bun-caller`), so a change to it is proven before it's tagged.
+
+### Bun products
+
+rollin and planning-poker use Bun as package manager and runtime. Set `packageManager` in `package.json` (`"bun@1.4.4"`): the workflows read the version from it. Commit `bun.lock` and delete `package-lock.json`. Then pass `package-manager: bun` to `web-ci.yml`, `budgets.yml` and `audit.yml`:
+
+```yaml
+jobs:
+  web:
+    uses: scottwmacleod/sm-core/.github/workflows/web-ci.yml@v26.11.12
+    with:
+      package-manager: bun
+      e2e: true
+  budgets:
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.12
+    with:
+      package-manager: bun
+      dist-dir: apps/web/dist
+```
+
+With `bun`, each job sets up Bun from `packageManager` (`bun-version` is the fallback when it names none), keys the `node_modules` cache on `bun.lock`, installs with `bun install --frozen-lockfile`, and turns the npm defaults into `bun run lint`, `bun run test`, `bun run build` and `bun run e2e`. Commands you pass yourself run as given. Playwright's browser is installed with `bunx playwright` from the workspace root, so `@playwright/test` must resolve there. Node is still set up, for `verify.mjs` and anything else that calls `node`. An npm caller keeps the same jobs and cache keys as before.
+
+Vercel's bundled Bun (1.3.14) can't read a Bun 1.4 `bun.lock`, so install the pinned Bun first in `vercel.json`:
+
+```json
+"installCommand": "curl -fsSL https://bun.sh/install | bash -s bun-v1.4.4 && ~/.bun/bin/bun install --frozen-lockfile",
+"buildCommand": "~/.bun/bin/bun --bun run build"
+```
+
+`npm i -g bun` doesn't work there: npm 12 blocks Bun's postinstall. Drop the workaround once Vercel ships Bun 1.4. Dependabot uses the `bun` ecosystem.
 
 ## Changing the brand
 
@@ -167,4 +196,4 @@ The inputs default to the shared script names (`npm run lint`, `bun check --no-s
 
 Tooling changes follow the same path: edit `tooling/`, bump `version` in `tokens.json` (`26.11.2`), run `npm run build` and open a PR. Merging tags and releases it; then sync.
 
-Node 22. `build`, `check` and `sync` have no dependencies; only `logos` needs `npm ci`. `check` also runs `scripts/test-sync.mjs`, which syncs into a throwaway repo and proves `verify.mjs` catches edits.
+Node 22. `build`, `check` and `sync` have no dependencies; only `logos` needs `npm ci`. `check` also runs `scripts/test-sync.mjs`, which syncs into a throwaway repo and proves `verify.mjs` catches edits, on Node and, when it's installed, on Bun.
