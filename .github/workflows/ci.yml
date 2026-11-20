@@ -24,11 +24,24 @@ jobs:
       lint-budget-seconds: 30
       test-budget-seconds: 45
 
+  # The same workflow as a Bun product calls it: Bun from packageManager,
+  # bun.lock, `bun run` defaults, and the sync/verify test on Bun's runtime.
+  web-bun:
+    uses: ./.github/workflows/web-ci.yml
+    with:
+      workspace: scripts/fixtures/bun-caller
+      package-manager: bun
+      typecheck-command: ""
+      skip-paths: '^(README\.md|AGENTS\.md|CLAUDE\.md)$'
+      lint-budget-seconds: 30
+      test-budget-seconds: 45
+      build-budget-seconds: 30
+
   # The check to require: passes only when every web-ci job did.
   ci:
-    needs: web
+    needs: [web, web-bun]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: test "${{ needs.web.result }}" = success
+      - run: test "${{ needs.web.result }}" = success && test "${{ needs.web-bun.result }}" = success

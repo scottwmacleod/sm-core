@@ -2,7 +2,9 @@
 //
 //   node scripts/test-sync.mjs
 //
-// Part of `npm run check`. No dependencies.
+// Part of `npm run check`. No dependencies. verify.mjs must work on Node and on
+// Bun (Bun products run it either way), so every case runs under both when Bun
+// is installed. sm-core's CI also runs this file on Bun (scripts/fixtures/bun-caller).
 import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,16 +17,21 @@ const failures = [];
 
 const sync = () =>
   execFileSync("node", [join(root, "scripts/sync.mjs"), "vendor/sm-core"], { cwd: product, encoding: "utf8" });
-const verify = () =>
-  spawnSync("node", ["vendor/sm-core/verify.mjs"], { cwd: product, encoding: "utf8" });
+const hasBun = spawnSync("bun", ["--version"]).status === 0;
+const runtimes = ["node", ...(hasBun ? ["bun"] : [])];
+const verify = (runtime) => spawnSync(runtime, ["vendor/sm-core/verify.mjs"], { cwd: product, encoding: "utf8" });
 
 function expect(name, wantPass, change) {
   sync();
   change?.();
-  const r = verify();
-  const passed = r.status === 0;
-  if (passed !== wantPass) {
-    failures.push(`${name}: verify ${passed ? "passed" : "failed"}, expected it to ${wantPass ? "pass" : "fail"}\n${r.stderr}`);
+  for (const runtime of runtimes) {
+    const r = verify(runtime);
+    const passed = r.status === 0;
+    if (passed !== wantPass) {
+      failures.push(
+        `${name} (${runtime}): verify ${passed ? "passed" : "failed"}, expected it to ${wantPass ? "pass" : "fail"}\n${r.stderr}${r.error ?? ""}`,
+      );
+    }
   }
 }
 
@@ -45,6 +52,11 @@ try {
   }
 
   expect("fresh sync", true);
+  // A Bun product (rollin, planning-poker) has bun.lock and packageManager.
+  expect("Bun product", true, () => {
+    writeFileSync(at("package.json"), JSON.stringify({ name: "product", private: true, packageManager: "bun@1.4.4" }));
+    writeFileSync(at("bun.lock"), "{}\n");
+  });
   expect("product text below the marker", true, () => appendFileSync(at(PR), "\n- [ ] Works on a phone\n"));
   expect("edit above the marker", false, () =>
     writeFileSync(at(PR), readFileSync(at(PR), "utf8").replace("## Summary", "## What")),
@@ -67,4 +79,5 @@ if (failures.length) {
   console.error(failures.map((f) => `✗ ${f}`).join("\n"));
   process.exit(1);
 }
-console.log("✓ sync copies tooling and installs shared files; verify catches every edit");
+console.log(`✓ sync copies tooling and installs shared files; verify catches every edit (on ${runtimes.join(", ")})`);
+if (!hasBun) console.log("  Bun isn't installed, so verify ran on Node only. CI's bun-caller job runs it on Bun.");

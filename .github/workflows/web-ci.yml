@@ -1,6 +1,6 @@
 name: web-ci
 
-# The sm_ suite's shared CI for a Node web project. Products call it at a
+# The sm_ suite's shared CI for a web project on npm or Bun. Products call it at a
 # pinned tag and add a small `ci` job that the branch rule requires (see the
 # README). Lint, typecheck, unit tests, build and browser tests run as
 # parallel jobs. Each job has a time budget and fails when it runs past it.
@@ -11,9 +11,19 @@ on:
   workflow_call:
     inputs:
       workspace:
-        description: Directory holding package.json and package-lock.json, relative to the repo root.
+        description: Directory holding package.json and the lockfile, relative to the repo root.
         type: string
         default: "."
+      package-manager:
+        description: >-
+          npm or bun. With bun, Bun's version comes from package.json's
+          packageManager (bun-version is the fallback), node_modules is keyed on
+          bun.lock and installed with `bun install --frozen-lockfile`, Playwright
+          runs through bunx, and the npm default commands become `bun run lint`,
+          `bun run test`, `bun run build` and `bun run e2e`. Node is still set up
+          for verify.mjs.
+        type: string
+        default: npm
       node-version:
         description: Node version. Empty reads node-version-file.
         type: string
@@ -54,6 +64,7 @@ on:
         type: string
         default: ""
       bun-version:
+        description: Bun for the typecheck job, and for a bun product whose package.json has no `packageManager` of `bun@…`.
         type: string
         default: 1.4.4
       lint-budget-seconds:
@@ -77,7 +88,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: sm-web-ci-${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  # The workspace keeps two calls in one workflow (sm-core's npm and Bun runs) apart.
+  group: sm-web-ci-${{ github.repository }}-${{ github.workflow }}-${{ inputs.workspace }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -96,6 +108,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           PR: ${{ github.event.pull_request.number }}
           SKIP_PATHS: ${{ inputs.skip-paths }}
+          PM: ${{ inputs.package-manager }}
           LINT: ${{ inputs.lint-command }}
           TYPECHECK: ${{ inputs.typecheck-command }}
           TEST: ${{ inputs.test-command }}
@@ -107,6 +120,17 @@ jobs:
           B_BUILD: ${{ inputs.build-budget-seconds }}
           B_E2E: ${{ inputs.e2e-budget-seconds }}
         run: |
+          case "$PM" in
+            npm) ;;
+            bun)
+              # The shared npm defaults, in Bun's words. Anything else runs as given.
+              if [ "$LINT" = "npm run lint" ]; then LINT="bun run lint"; fi
+              if [ "$TEST" = "npm test" ]; then TEST="bun run test"; fi
+              if [ "$BUILD" = "npm run build" ]; then BUILD="bun run build"; fi
+              if [ "$E2E" = "npm run e2e" ]; then E2E="bun run e2e"; fi
+              ;;
+            *) echo "::error::package-manager must be npm or bun, not '$PM'"; exit 1 ;;
+          esac
           skip=false
           if [ "$EVENT" = pull_request ] && [ -n "$SKIP_PATHS" ]; then
             if files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename') && [ -n "$files" ]; then
@@ -161,6 +185,28 @@ jobs:
           node-version: ${{ inputs.node-version }}
           node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
 
+      # A bun product gets Bun in every job; an npm product only for a bun typecheck.
+      - name: Bun version
+        id: bun
+        if: inputs.package-manager == 'bun' || (matrix.task == 'typecheck' && startsWith(matrix.run, 'bun '))
+        env:
+          PM: ${{ inputs.package-manager }}
+          FALLBACK: ${{ inputs.bun-version }}
+        run: |
+          v=""
+          if [ "$PM" = bun ] && [ -f package.json ]; then
+            v=$(jq -r '.packageManager // "" | select(startswith("bun@")) | ltrimstr("bun@") | split("+")[0]' package.json)
+          fi
+          [ -n "$v" ] || echo "package.json names no bun@ packageManager; using bun-version"
+          echo "version=${v:-$FALLBACK}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Bun
+        if: steps.bun.outputs.version != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ steps.bun.outputs.version }}
+
+      # npm products keep the key they always had, so their cache carries over.
       - name: Restore node_modules
         id: modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -169,11 +215,14 @@ jobs:
             ${{ inputs.workspace }}/node_modules
             ${{ inputs.workspace }}/*/node_modules
             ${{ inputs.workspace }}/*/*/node_modules
-          key: sm-modules-${{ runner.os }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workspace)) }}
+          key: >-
+            ${{ inputs.package-manager == 'bun'
+              && format('sm-modules-{0}-node{1}-bun{2}-{3}', runner.os, steps.node.outputs.node-version, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
+              || format('sm-modules-{0}-node{1}-{2}', runner.os, steps.node.outputs.node-version, hashFiles(format('{0}/package-lock.json', inputs.workspace))) }}
 
       - name: Install dependencies
         if: steps.modules.outputs.cache-hit != 'true'
-        run: npm ci --no-audit --no-fund
+        run: ${{ inputs.package-manager == 'bun' && 'bun install --frozen-lockfile' || 'npm ci --no-audit --no-fund' }}
 
       # Saved by whichever job installs first; main's runs seed it for every PR.
       - name: Save node_modules
@@ -185,12 +234,6 @@ jobs:
             ${{ inputs.workspace }}/*/node_modules
             ${{ inputs.workspace }}/*/*/node_modules
           key: ${{ steps.modules.outputs.cache-primary-key }}
-
-      - name: Set up Bun
-        if: matrix.task == 'typecheck' && startsWith(matrix.run, 'bun ')
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ inputs.bun-version }}
 
       - name: sm-core copy is untouched
         if: matrix.task == 'lint' && hashFiles('vendor/sm-core/verify.mjs') != ''
@@ -213,15 +256,19 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workspace)) }}
+          key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.workspace, inputs.package-manager == 'bun' && 'bun.lock' || 'package-lock.json')) }}
 
+      # The workspace root's own Playwright, so the browser matches it.
       - name: Install Playwright browser
         if: matrix.task == 'e2e'
+        env:
+          X: ${{ inputs.package-manager == 'bun' && 'bunx' || 'npx' }}
+          HIT: ${{ steps.browsers.outputs.cache-hit }}
         run: |
-          if [ "${{ steps.browsers.outputs.cache-hit }}" = true ]; then
-            npx playwright install-deps chromium-headless-shell > /dev/null
+          if [ "$HIT" = true ]; then
+            $X playwright install-deps chromium-headless-shell > /dev/null
           else
-            npx playwright install --with-deps --only-shell chromium
+            $X playwright install --with-deps --only-shell chromium
           fi
 
       - name: Save Playwright browsers

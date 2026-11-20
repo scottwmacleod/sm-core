@@ -21,6 +21,7 @@ name: budgets
 #         dist-dir: apps/web/dist
 #         js-kb: 120
 #         css-kb: 20
+#         package-manager: bun     # a Bun product; npm is the default
 
 on:
   workflow_call:
@@ -28,6 +29,18 @@ on:
       workspace:
         type: string
         default: "."
+      package-manager:
+        description: >-
+          npm or bun, as in web-ci.yml: with bun, Bun comes from package.json's
+          packageManager (bun-version is the fallback), node_modules is keyed on
+          bun.lock and installed with `bun install --frozen-lockfile`, and the
+          default build becomes `bun run build`.
+        type: string
+        default: npm
+      bun-version:
+        description: Bun for a bun product whose package.json has no `packageManager` of `bun@…`.
+        type: string
+        default: 1.4.4
       node-version:
         description: Node version. Empty reads node-version-file.
         type: string
@@ -127,6 +140,25 @@ jobs:
           node-version: ${{ inputs.node-version }}
           node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
 
+      - name: Bun version
+        id: bun
+        if: inputs.package-manager == 'bun'
+        env:
+          FALLBACK: ${{ inputs.bun-version }}
+        run: |
+          v=""
+          if [ -f package.json ]; then
+            v=$(jq -r '.packageManager // "" | select(startswith("bun@")) | ltrimstr("bun@") | split("+")[0]' package.json)
+          fi
+          [ -n "$v" ] || echo "package.json names no bun@ packageManager; using bun-version"
+          echo "version=${v:-$FALLBACK}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Bun
+        if: steps.bun.outputs.version != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ steps.bun.outputs.version }}
+
       - name: Restore node_modules
         if: inputs.build-command != ''
         id: modules
@@ -137,17 +169,27 @@ jobs:
             ${{ inputs.workspace }}/*/node_modules
             ${{ inputs.workspace }}/*/*/node_modules
           # Same key as web-ci.yml, so the two share one cache.
-          key: sm-modules-${{ runner.os }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workspace)) }}
+          key: >-
+            ${{ inputs.package-manager == 'bun'
+              && format('sm-modules-{0}-node{1}-bun{2}-{3}', runner.os, steps.node.outputs.node-version, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
+              || format('sm-modules-{0}-node{1}-{2}', runner.os, steps.node.outputs.node-version, hashFiles(format('{0}/package-lock.json', inputs.workspace))) }}
 
       - name: Install dependencies
         if: inputs.build-command != '' && steps.modules.outputs.cache-hit != 'true'
-        run: npm ci --no-audit --no-fund
+        run: ${{ inputs.package-manager == 'bun' && 'bun install --frozen-lockfile' || 'npm ci --no-audit --no-fund' }}
 
       - name: Build
         if: inputs.build-command != ''
         env:
           CMD: ${{ inputs.build-command }}
-        run: bash -eo pipefail -c "$CMD"
+          PM: ${{ inputs.package-manager }}
+        run: |
+          case "$PM" in
+            npm) ;;
+            bun) if [ "$CMD" = "npm run build" ]; then CMD="bun run build"; fi ;;
+            *) echo "::error::package-manager must be npm or bun, not '$PM'"; exit 1 ;;
+          esac
+          bash -eo pipefail -c "$CMD"
 
       # main's runs save their sizes; a PR restores the newest one as "before".
       - name: Restore main's sizes

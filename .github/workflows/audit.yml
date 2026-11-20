@@ -1,12 +1,13 @@
 name: audit
 
-# Dependency advisories via `npm audit`. Deliberately not a required check: a
+# Dependency advisories via `npm audit`, or `bun audit` for a Bun product
+# (`package-manager: bun`). Deliberately not a required check: a
 # new advisory can turn this red on an unrelated PR or on the weekly run.
 #
 # Caller:
 #   on:
 #     pull_request:
-#       paths: ["**/package.json", "**/package-lock.json"]
+#       paths: ["**/package.json", "**/package-lock.json", "**/bun.lock"]
 #     push:
 #       branches: [main]
 #     schedule:
@@ -16,6 +17,8 @@ name: audit
 #   jobs:
 #     audit:
 #       uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.3
+#       with:
+#         package-manager: bun    # a Bun product; npm is the default
 
 on:
   workflow_call:
@@ -23,6 +26,13 @@ on:
       workspace:
         type: string
         default: "."
+      package-manager:
+        description: npm or bun. With bun, `bun audit` reads bun.lock, with Bun from package.json's packageManager (bun-version is the fallback).
+        type: string
+        default: npm
+      bun-version:
+        type: string
+        default: 1.4.4
       audit-level:
         type: string
         default: high
@@ -32,6 +42,8 @@ permissions:
 
 jobs:
   npm-audit:
+    # The job keeps its id; its name says which tool ran.
+    name: ${{ inputs.package-manager }}-audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -42,7 +54,33 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: inputs.package-manager != 'bun'
         with:
           node-version: lts/*
+      - name: Bun version
+        id: bun
+        if: inputs.package-manager == 'bun'
+        env:
+          FALLBACK: ${{ inputs.bun-version }}
+        run: |
+          v=""
+          if [ -f package.json ]; then
+            v=$(jq -r '.packageManager // "" | select(startswith("bun@")) | ltrimstr("bun@") | split("+")[0]' package.json)
+          fi
+          [ -n "$v" ] || echo "package.json names no bun@ packageManager; using bun-version"
+          echo "version=${v:-$FALLBACK}" >> "$GITHUB_OUTPUT"
+      - name: Set up Bun
+        if: steps.bun.outputs.version != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ steps.bun.outputs.version }}
       - name: Audit production and development dependencies
-        run: npm audit --audit-level=${{ inputs.audit-level }}
+        env:
+          PM: ${{ inputs.package-manager }}
+          LEVEL: ${{ inputs.audit-level }}
+        run: |
+          case "$PM" in
+            npm) npm audit --audit-level="$LEVEL" ;;
+            bun) bun audit --audit-level="$LEVEL" ;;
+            *) echo "::error::package-manager must be npm or bun, not '$PM'"; exit 1 ;;
+          esac
