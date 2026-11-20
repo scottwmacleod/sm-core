@@ -69,6 +69,7 @@ on:
         type: number
         default: 90
       e2e-budget-seconds:
+        description: Time for the browser tests alone. The clock starts after Playwright's browser setup, so a slow apt mirror doesn't count.
         type: number
         default: 120
 
@@ -229,6 +230,14 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browsers.outputs.cache-primary-key }}
+
+      # Browser setup (apt mirrors, the browser download) varies by tens of
+      # seconds from run to run and isn't ours to fix. The e2e budget times the
+      # tests, so a slow mirror can't fail a PR but slow tests still do.
+      - name: Restart the clock after browser setup
+        if: matrix.task == 'e2e'
+        working-directory: .
+        run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: ${{ matrix.task }}
         if: matrix.run != 'true'
