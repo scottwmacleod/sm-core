@@ -13,7 +13,6 @@ const C = {
   inkDark: colour.ink.dark,
   inkLight: colour.ink.light,
   signal: colour.signal.dark,
-  onSignal: colour["on-signal"].dark,
 };
 
 function font(weight) {
@@ -72,10 +71,9 @@ function tile(text, { bg, ink, cursor, radius, markShare, weight = 700, heavy = 
 }
 
 const DARK = { bg: C.ground, ink: C.inkDark, cursor: C.signal };
-const LIME = { bg: C.signal, ink: C.onSignal, cursor: C.onSignal };
 
 const marks = [
-  { id: "sm", name: "sm", icons: { "sm-lime": ["sm", LIME], "sm-dark": ["sm", DARK] } },
+  { id: "sm", name: "sm", icons: { "sm-dark": ["sm", DARK] } },
   { id: "planning-poker", name: "planning-poker", icons: { "planning-poker": ["p", DARK] } },
   { id: "rollin", name: "rollin", icons: { rollin: ["r", DARK] } },
 ];
