@@ -52,17 +52,9 @@ on:
         type: string
         default: ""
       lighthouse-runs:
-        description: Runs per URL in the first pass; the median is asserted.
+        description: Runs per URL; the median is asserted. One run is enough once Chrome is warm.
         type: number
         default: 1
-      lighthouse-retry-runs:
-        description: >-
-          Runs per URL in a second pass, only when the first pass misses a
-          score. The median of those runs is asserted, so one slow runner can't
-          fail a PR but a real regression still does. 0 turns the retry off.
-          The retry's time doesn't count towards budget-seconds.
-        type: number
-        default: 3
       lighthouse-skip-pages:
         description: >-
           Paths to leave out when serving dist-dir, space separated (e.g.
@@ -104,6 +96,26 @@ jobs:
       - name: Start the clock
         working-directory: .
         run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Warm Chrome
+        if: inputs.lighthouse
+        working-directory: .
+        run: |
+          chrome="$CHROME_PATH"
+          if [ -z "$chrome" ]; then
+            for c in google-chrome-stable google-chrome chromium-browser chromium; do
+              if command -v "$c" > /dev/null; then chrome=$(command -v "$c"); break; fi
+            done
+          fi
+          if [ -z "$chrome" ]; then
+            echo "::error title=No Chrome::Lighthouse needs Chrome, and none is on this runner."
+            exit 1
+          fi
+          dir=$(dirname "$(readlink -f "$chrome")")
+          bin="$dir/chrome"
+          [ -f "$bin" ] || bin=$(readlink -f "$chrome")
+          echo "Reading $bin into the page cache in the background"
+          nohup sh -c 'cat "$1" > /dev/null; echo $? > "$2"' sh "$bin" "$RUNNER_TEMP/sm-chrome-warm" > /dev/null 2>&1 &
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -251,7 +263,6 @@ jobs:
           DIST: ${{ inputs.dist-dir }}
           URL: ${{ inputs.lighthouse-url }}
           RUNS: ${{ inputs.lighthouse-runs }}
-          RETRY_RUNS: ${{ inputs.lighthouse-retry-runs }}
           SKIP: ${{ inputs.lighthouse-skip-pages }}
           PERF: ${{ inputs.performance }}
           A11Y: ${{ inputs.accessibility }}
@@ -269,22 +280,16 @@ jobs:
                 "categories:seo": ["error", {minScore: $s}]}},
               upload: {target: "filesystem", outputDir: ".lighthouseci-report"}}}' > .sm-lighthouserc.json
           lhci="npx -y @lhci/cli@0.16.1"
-          $lhci collect --config=.sm-lighthouserc.json
-          if ! $lhci assert --config=.sm-lighthouserc.json; then
-            if [ "$RETRY_RUNS" -le 0 ]; then
-              $lhci upload --config=.sm-lighthouserc.json || true
-              exit 1
-            fi
-            echo "::notice title=Lighthouse retry::A score missed on the first pass; running $RETRY_RUNS more times and asserting on the median."
-            retry_started=$(date +%s)
-            $lhci collect --config=.sm-lighthouserc.json --numberOfRuns="$RETRY_RUNS"
-            echo "SM_STARTED=$(( SM_STARTED + $(date +%s) - retry_started ))" >> "$GITHUB_ENV"
-            status=0
-            $lhci assert --config=.sm-lighthouserc.json || status=$?
-            $lhci upload --config=.sm-lighthouserc.json || true
-            exit $status
+          until [ -s "$RUNNER_TEMP/sm-chrome-warm" ]; do sleep 0.2; done
+          if [ "$(cat "$RUNNER_TEMP/sm-chrome-warm")" != 0 ]; then
+            echo "::error title=Chrome not warmed::Couldn't read Chrome's binary into the page cache, so the first run would be scored on a cold disk."
+            exit 1
           fi
-          $lhci upload --config=.sm-lighthouserc.json
+          $lhci collect --config=.sm-lighthouserc.json
+          status=0
+          $lhci assert --config=.sm-lighthouserc.json || status=$?
+          $lhci upload --config=.sm-lighthouserc.json || true
+          exit $status
 
       - name: Within budget
         if: always()
