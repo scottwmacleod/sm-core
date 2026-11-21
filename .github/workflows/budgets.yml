@@ -123,6 +123,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: inputs.package-manager != 'bun'
         id: node
         with:
           node-version: ${{ inputs.node-version }}
@@ -268,6 +269,7 @@ jobs:
           A11Y: ${{ inputs.accessibility }}
           BP: ${{ inputs.best-practices }}
           SEO: ${{ inputs.seo }}
+          PM: ${{ inputs.package-manager }}
         run: |
           jq -n --argjson p "$PERF" --argjson a "$A11Y" --argjson b "$BP" --argjson s "$SEO" --argjson runs "$RUNS" \
             --arg url "$URL" --arg dist "$DIST" --arg skip "$SKIP" '{ci: {
@@ -279,7 +281,7 @@ jobs:
                 "categories:best-practices": ["error", {minScore: $b}],
                 "categories:seo": ["error", {minScore: $s}]}},
               upload: {target: "filesystem", outputDir: ".lighthouseci-report"}}}' > .sm-lighthouserc.json
-          lhci="npx -y @lhci/cli@0.16.1"
+          if [ "$PM" = bun ]; then lhci="bunx @lhci/cli@0.16.1"; else lhci="npx -y @lhci/cli@0.16.1"; fi
           until [ -s "$RUNNER_TEMP/sm-chrome-warm" ]; do sleep 0.2; done
           if [ "$(cat "$RUNNER_TEMP/sm-chrome-warm")" != 0 ]; then
             echo "::error title=Chrome not warmed::Couldn't read Chrome's binary into the page cache, so the first run would be scored on a cold disk."
