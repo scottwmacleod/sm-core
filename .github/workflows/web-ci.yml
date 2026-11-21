@@ -30,11 +30,11 @@ on:
         type: string
         default: ""
       lint-command:
-        description: Format and lint. Empty still runs the job for verify.mjs and `checks`.
+        description: Format and lint. Runs in the checks job, beside verify.mjs, `checks`, typecheck and build.
         type: string
         default: npm run lint
       typecheck-command:
-        description: Typecheck. `bun check --no-script` by default (without --no-script, bun runs a package's `check` script instead of typechecking); pass `npx tsc --noEmit` (or the repo's script) as the fallback. Empty skips the job.
+        description: Typecheck. `bun check --no-script` by default (without --no-script, bun runs a package's `check` script instead of typechecking); pass `npx tsc --noEmit` (or the repo's script) as the fallback. Empty skips it.
         type: string
         default: bun check --no-script
       test-command:
@@ -42,7 +42,7 @@ on:
         type: string
         default: npm test
       build-command:
-        description: Production build. Empty skips the job.
+        description: Production build. Empty skips it.
         type: string
         default: npm run build
       e2e:
@@ -57,9 +57,13 @@ on:
         type: string
         default: ""
       bun-version:
-        description: Bun for the typecheck job, and for a bun product whose package.json has no `packageManager` of `bun@…`.
+        description: Bun for a `bun …` typecheck in an npm product, and for a bun product whose package.json has no `packageManager` of `bun@…`.
         type: string
         default: 1.4.5
+      checks-budget-seconds:
+        description: The checks job (verify.mjs, `checks`, lint, typecheck and build in one job), setup included.
+        type: number
+        default: 35
       lint-budget-seconds:
         type: number
         default: 45
@@ -85,29 +89,39 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  plan:
+  check:
+    name: ${{ matrix.task }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-      skip: ${{ steps.plan.outputs.skip }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        task: ${{ fromJSON(format('["checks"{0}{1}]', inputs.test-command != '' && ',"test"' || '', inputs.e2e && ',"e2e"' || '')) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.workspace }}
     steps:
-      - id: plan
+      - name: Start the clock
+        working-directory: .
+        run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Plan
+        id: plan
+        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           PR: ${{ github.event.pull_request.number }}
           SKIP_PATHS: ${{ inputs.skip-paths }}
           PM: ${{ inputs.package-manager }}
+          TASK: ${{ matrix.task }}
           LINT: ${{ inputs.lint-command }}
           TYPECHECK: ${{ inputs.typecheck-command }}
           TEST: ${{ inputs.test-command }}
           BUILD: ${{ inputs.build-command }}
-          E2E: ${{ inputs.e2e && inputs.e2e-command || '' }}
-          B_LINT: ${{ inputs.lint-budget-seconds }}
-          B_TYPECHECK: ${{ inputs.typecheck-budget-seconds }}
+          E2E: ${{ inputs.e2e-command }}
+          B_CHECKS: ${{ inputs.checks-budget-seconds }}
           B_TEST: ${{ inputs.test-budget-seconds }}
-          B_BUILD: ${{ inputs.build-budget-seconds }}
           B_E2E: ${{ inputs.e2e-budget-seconds }}
         run: |
           case "$PM" in
@@ -123,43 +137,22 @@ jobs:
           skip=false
           if [ "$EVENT" = pull_request ] && [ -n "$SKIP_PATHS" ]; then
             if files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename') && [ -n "$files" ]; then
-              echo "Changed files:"; echo "$files"
               if ! echo "$files" | grep -Ev "$SKIP_PATHS" > /dev/null; then skip=true; fi
             fi
           fi
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
-          [ -z "$LINT" ] && LINT=true
-          matrix=$(jq -cn \
-            --arg lint "$LINT" --arg typecheck "$TYPECHECK" --arg test "$TEST" --arg build "$BUILD" --arg e2e "$E2E" \
-            --argjson blint "$B_LINT" --argjson btypecheck "$B_TYPECHECK" --argjson btest "$B_TEST" \
-            --argjson bbuild "$B_BUILD" --argjson be2e "$B_E2E" '
-            [ {task: "lint", run: $lint, budget: $blint},
-              {task: "typecheck", run: $typecheck, budget: $btypecheck},
-              {task: "test", run: $test, budget: $btest},
-              {task: "build", run: $build, budget: $bbuild},
-              {task: "e2e", run: $e2e, budget: $be2e} ]
-            | map(select(.run != "")) | {include: .}')
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "skip=$skip; jobs: $(echo "$matrix" | jq -r '[.include[].task] | join(", ")')"
-
-  check:
-    needs: plan
-    if: needs.plan.outputs.skip != 'true'
-    name: ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    defaults:
-      run:
-        working-directory: ${{ inputs.workspace }}
-    steps:
-      - name: Start the clock
-        working-directory: .
-        run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+          [ "$skip" = true ] && echo "Every changed file matches skip-paths; nothing to check."
+          {
+            echo "lint=$LINT"; echo "typecheck=$TYPECHECK"; echo "build=$BUILD"
+            case "$TASK" in
+              checks) echo "budget=$B_CHECKS" ;;
+              test) echo "run=$TEST"; echo "budget=$B_TEST" ;;
+              e2e) echo "run=$E2E"; echo "budget=$B_E2E" ;;
+            esac
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.plan.outputs.skip != 'true'
         with:
           filter: blob:none
           fetch-depth: 0
@@ -167,13 +160,14 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: node
+        if: steps.plan.outputs.skip != 'true' && inputs.package-manager == 'npm'
         with:
           node-version: ${{ inputs.node-version }}
           node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
 
       - name: Bun version
         id: bun
-        if: inputs.package-manager == 'bun' || (matrix.task == 'typecheck' && startsWith(matrix.run, 'bun '))
+        if: steps.plan.outputs.skip != 'true' && (inputs.package-manager == 'bun' || (matrix.task == 'checks' && startsWith(inputs.typecheck-command, 'bun ')))
         env:
           PM: ${{ inputs.package-manager }}
           FALLBACK: ${{ inputs.bun-version }}
@@ -193,6 +187,7 @@ jobs:
 
       - name: Restore node_modules
         id: modules
+        if: steps.plan.outputs.skip != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -201,15 +196,15 @@ jobs:
             ${{ inputs.workspace }}/*/*/node_modules
           key: >-
             ${{ inputs.package-manager == 'bun'
-              && format('sm-modules-{0}-node{1}-bun{2}-{3}', runner.os, steps.node.outputs.node-version, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
+              && format('sm-modules-{0}-bun{1}-{2}', runner.os, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
               || format('sm-modules-{0}-node{1}-{2}', runner.os, steps.node.outputs.node-version, hashFiles(format('{0}/package-lock.json', inputs.workspace))) }}
 
       - name: Install dependencies
-        if: steps.modules.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.skip != 'true' && steps.modules.outputs.cache-hit != 'true'
         run: ${{ inputs.package-manager == 'bun' && 'bun install --frozen-lockfile' || 'npm ci --no-audit --no-fund' }}
 
       - name: Save node_modules
-        if: steps.modules.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.skip != 'true' && steps.modules.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -218,23 +213,51 @@ jobs:
             ${{ inputs.workspace }}/*/*/node_modules
           key: ${{ steps.modules.outputs.cache-primary-key }}
 
-      - name: sm-core copy is untouched
-        if: matrix.task == 'lint' && hashFiles('vendor/sm-core/verify.mjs') != ''
-        working-directory: .
-        run: node vendor/sm-core/verify.mjs
-
-      - name: Extra checks
-        if: matrix.task == 'lint' && inputs.checks != ''
+      - name: Checks, lint, typecheck and build
+        if: steps.plan.outputs.skip != 'true' && matrix.task == 'checks'
         env:
+          PM: ${{ inputs.package-manager }}
           CHECKS: ${{ inputs.checks }}
+          LINT: ${{ steps.plan.outputs.lint }}
+          TYPECHECK: ${{ steps.plan.outputs.typecheck }}
+          BUILD: ${{ steps.plan.outputs.build }}
+          B_LINT: ${{ inputs.lint-budget-seconds }}
+          B_TYPECHECK: ${{ inputs.typecheck-budget-seconds }}
+          B_BUILD: ${{ inputs.build-budget-seconds }}
+          ROOT: ${{ github.workspace }}
         run: |
+          failed=()
+          step() {
+            local name=$1 budget=$2 cmd=$3 start took
+            [ -z "$cmd" ] && return 0
+            echo "::group::$name: $cmd"
+            start=$(date +%s)
+            if bash -eo pipefail -c "$cmd"; then took=$(( $(date +%s) - start ))
+            else took=$(( $(date +%s) - start )); failed+=("$name failed: $cmd"); fi
+            echo "::endgroup::"
+            echo "$name took ${took}s"
+            echo "| $name | ${took}s | ${budget:-} |" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "$budget" ] && [ "$took" -gt "$budget" ]; then
+              failed+=("$name took ${took}s, over its ${budget}s budget")
+            fi
+          }
+          if [ -f "$ROOT/vendor/sm-core/verify.mjs" ]; then
+            runner=node; [ "$PM" = bun ] && runner=bun
+            step "sm-core copy" "" "cd '$ROOT' && $runner vendor/sm-core/verify.mjs"
+          fi
           while IFS= read -r cmd; do
-            [ -z "$cmd" ] && continue
-            echo "::group::$cmd"; bash -eo pipefail -c "$cmd"; echo "::endgroup::"
+            [ -n "$cmd" ] && step "check" "" "$cmd"
           done <<< "$CHECKS"
+          step lint "$B_LINT" "$LINT"
+          step typecheck "$B_TYPECHECK" "$TYPECHECK"
+          step build "$B_BUILD" "$BUILD"
+          if [ "${#failed[@]}" -gt 0 ]; then
+            for f in "${failed[@]}"; do echo "::error::$f"; done
+            exit 1
+          fi
 
       - name: Restore Playwright browsers
-        if: matrix.task == 'e2e'
+        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e'
         id: browsers
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -242,7 +265,7 @@ jobs:
           key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.workspace, inputs.package-manager == 'bun' && 'bun.lock' || 'package-lock.json')) }}
 
       - name: Install Playwright browser
-        if: matrix.task == 'e2e'
+        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e'
         env:
           X: ${{ inputs.package-manager == 'bun' && 'bunx' || 'npx' }}
           HIT: ${{ steps.browsers.outputs.cache-hit }}
@@ -254,21 +277,21 @@ jobs:
           fi
 
       - name: Save Playwright browsers
-        if: matrix.task == 'e2e' && steps.browsers.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e' && steps.browsers.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browsers.outputs.cache-primary-key }}
 
       - name: Restart the clock after browser setup
-        if: matrix.task == 'e2e'
+        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e'
         working-directory: .
         run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: ${{ matrix.task }}
-        if: matrix.run != 'true'
+        if: steps.plan.outputs.skip != 'true' && matrix.task != 'checks'
         env:
-          CMD: ${{ matrix.run }}
+          CMD: ${{ steps.plan.outputs.run }}
         run: bash -eo pipefail -c "$CMD"
 
       - name: Within budget
@@ -276,29 +299,12 @@ jobs:
         working-directory: .
         env:
           TASK: ${{ matrix.task }}
-          BUDGET: ${{ matrix.budget }}
+          BUDGET: ${{ steps.plan.outputs.budget }}
         run: |
           took=$(( $(date +%s) - SM_STARTED ))
           echo "$TASK took ${took}s (budget ${BUDGET}s)"
-          echo "| $TASK | ${took}s | ${BUDGET}s |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| $TASK job | ${took}s | ${BUDGET}s |" >> "$GITHUB_STEP_SUMMARY"
           if [ "$took" -gt "$BUDGET" ]; then
             echo "::error title=Over budget::$TASK took ${took}s, over its ${BUDGET}s budget. Find what got slower; don't raise the budget to hide it."
             exit 1
           fi
-
-  result:
-    needs: [plan, check]
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - env:
-          PLAN: ${{ needs.plan.result }}
-          CHECK: ${{ needs.check.result }}
-        run: |
-          echo "plan: $PLAN, checks: $CHECK"
-          [ "$PLAN" = success ] || { echo "::error::planning failed"; exit 1; }
-          case "$CHECK" in
-            success|skipped) ;;
-            *) echo "::error::a check $CHECK"; exit 1 ;;
-          esac

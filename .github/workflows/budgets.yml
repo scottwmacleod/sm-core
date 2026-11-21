@@ -146,7 +146,7 @@ jobs:
             ${{ inputs.workspace }}/*/*/node_modules
           key: >-
             ${{ inputs.package-manager == 'bun'
-              && format('sm-modules-{0}-node{1}-bun{2}-{3}', runner.os, steps.node.outputs.node-version, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
+              && format('sm-modules-{0}-bun{1}-{2}', runner.os, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
               || format('sm-modules-{0}-node{1}-{2}', runner.os, steps.node.outputs.node-version, hashFiles(format('{0}/package-lock.json', inputs.workspace))) }}
 
       - name: Install dependencies
