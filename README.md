@@ -1,6 +1,6 @@
 # sm-core
 
-The brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin): design tokens, the generated CSS, every mark and icon, and the shared engineering files (configs, templates, agent docs and a pre-push hook). Each product keeps a pinned copy, so the suite looks and works the same everywhere and changes on purpose.
+The brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin): design tokens, the generated CSS, every mark and icon, and the shared engineering files (configs, templates, agent docs and git hooks). Each product keeps a pinned copy, so the suite looks and works the same everywhere and changes on purpose.
 
 The rules for using all of this are in the [sm_ core style guide](https://claude.ai/artifact/2xghCuwzxtMn5UfRsMUdHt).
 
@@ -18,7 +18,7 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
 | `tooling/lint/no-comments.mjs` | The no-comments check with its ratchet. See **No comments**. |
 | `tooling/skills/delete-comment/` | The `/delete-comment` skill. Sync installs it at `.claude/skills/delete-comment/`. |
-| `tooling/hooks/` | The pre-push hook (format, lint and typecheck on changed files) and `install.mjs`, which points git at it. |
+| `tooling/hooks/` | The hk git hooks: `sm.pkl` (pre-commit formats and lints staged files, pre-push runs `check`), hk's schema in `hk/`, a fallback for machines without hk, and `install.mjs`, which points git at them. |
 | `tooling/analytics/sm-posthog.js` | The PostHog loader: queues calls, loads PostHog's script once the page is idle, and serves flags without flicker. See **PostHog**. |
 | `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
 | `.github/workflows/` | The shared CI, called by products at a release tag. See **Shared CI**. |
@@ -57,7 +57,7 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 { "extends": "./vendor/sm-core/tooling/tsconfig.base.json", "compilerOptions": { "lib": ["ES2022", "DOM"] } }
 ```
 
-**Pre-push hook:** add `"prepare": "node vendor/sm-core/tooling/hooks/install.mjs"` to `package.json`. It sets `core.hooksPath` and skips itself in CI. The hook runs Biome on the changed files and the `typecheck` script; a repo that needs something else defines a `pre-push` script, which gets the changed files as arguments. Scripts run on Bun when `packageManager` names `bun@` or `bun.lock` exists, and on npm otherwise.
+**Git hooks:** add `"prepare": "bun vendor/sm-core/tooling/hooks/install.mjs"` to `package.json` and an `hk.pkl` at the root that says `amends "vendor/sm-core/tooling/hooks/sm.pkl"`. Install [hk](https://hk.jdx.dev) with `mise use -g hk` or `brew install hk`. Pre-commit runs the `format` script on the staged files, stages the result, then runs `lint` on them; pre-push runs `check`, the same command as CI. `format` and `lint` must accept file paths (`lint` may check more than it's given). Without hk the hooks still run: `lint` on the staged files without fixing, and `check` on push. See ADR-0009.
 
 **Agent docs:** point `AGENTS.md` at `docs/agents/sm-conventions.md` and keep only what's specific to the product.
 
