@@ -57,7 +57,7 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 { "extends": "./vendor/sm-core/tooling/tsconfig.base.json", "compilerOptions": { "lib": ["ES2022", "DOM"] } }
 ```
 
-**Pre-push hook:** add `"prepare": "node vendor/sm-core/tooling/hooks/install.mjs"` to `package.json`. It sets `core.hooksPath` and skips itself in CI. The hook runs Biome on the changed files and `npm run typecheck`; a repo that needs something else defines a `pre-push` script, which gets the changed files as arguments.
+**Pre-push hook:** add `"prepare": "node vendor/sm-core/tooling/hooks/install.mjs"` to `package.json`. It sets `core.hooksPath` and skips itself in CI. The hook runs Biome on the changed files and the `typecheck` script; a repo that needs something else defines a `pre-push` script, which gets the changed files as arguments. Scripts run on Bun when `packageManager` names `bun@` or `bun.lock` exists, and on npm otherwise.
 
 **Agent docs:** point `AGENTS.md` at `docs/agents/sm-conventions.md` and keep only what's specific to the product.
 
@@ -179,7 +179,7 @@ permissions:
   pull-requests: write   # for the size comment
 jobs:
   budgets:
-    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.16
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.17
     with:
       dist-dir: apps/web/dist
       js-kb: 120
@@ -196,7 +196,7 @@ permissions:
   pull-requests: write
 jobs:
   auto-merge:
-    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.16
+    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.17
     secrets:
       merge-token: ${{ secrets.SM_MERGE_TOKEN }}
 ```
@@ -209,7 +209,7 @@ permissions:
   pull-requests: write
 jobs:
   dependabot:
-    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.16
+    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.17
 ```
 
 ```yaml
@@ -225,7 +225,7 @@ permissions:
   contents: read
 jobs:
   audit:
-    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.16
+    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.17
 ```
 
 ```yaml
@@ -239,7 +239,7 @@ permissions:
   issues: write
 jobs:
   behind:
-    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.16
+    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.17
 ```
 
 ### Bun products
