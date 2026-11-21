@@ -27,10 +27,11 @@ const js = [
   "// @ts-expect-error a directive, allowed",
   "const d = a / b; // after division",
   "const e = x.map((y) => y / 2); /* after */",
+  "// oxlint-disable-next-line no-console",
 ].join("\n");
 const got = lines("a.mjs", js);
 check("JS: finds line, trailing and block comments only", same(got, [2, 3, 7, 11, 12]), `got ${got}`);
-check("JS: shebang and directives aren't counted", !got.includes(1) && !got.includes(9) && !got.includes(10));
+check("JS: shebang and directives aren't counted", !got.includes(1) && !got.includes(9) && !got.includes(10) && !got.includes(14));
 const jsCount = findComments("a.mjs", js);
 check("JS: a block comment counts each of its lines", jsCount.lines === 6, `got ${jsCount.lines}`);
 check("JS: only whole-line comments shed lines", jsCount.shed === 3, `got ${jsCount.shed}`);

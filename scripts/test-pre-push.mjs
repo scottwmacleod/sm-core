@@ -55,6 +55,16 @@ check("Bun product: its pre-push script runs on Bun with the files", /^bun run -
 r = push(["a.ts"], { packageJson: { scripts: { typecheck: "x" } }, lockfile: "package-lock.json" });
 check("npm product: typecheck runs on npm", r.calls.trim() === "npm run typecheck --silent", r.calls + r.out);
 
+r = push(["a.ts"], { packageJson: { packageManager: "bun@1.4.5", scripts: { lint: "x", typecheck: "x" } } });
+check(
+  "Bun product with a lint script: lint, then typecheck",
+  r.calls.trim() === "bun run --silent lint\nbun run --silent typecheck",
+  r.calls + r.out,
+);
+
+r = push(["a.md"], { packageJson: { packageManager: "bun@1.4.5", scripts: { lint: "x", typecheck: "x" } } });
+check("lint runs for any changed file, typecheck only for code", r.calls.trim() === "bun run --silent lint", r.calls + r.out);
+
 r = push(["a.md"], { packageJson: { packageManager: "bun@1.4.5", scripts: { typecheck: "x" } } });
 check("no code file changed: no typecheck", r.calls === "" && r.status === 0, r.calls + r.out);
 

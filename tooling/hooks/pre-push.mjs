@@ -77,7 +77,9 @@ if (scripts["pre-push"]) {
   step(`${pm} run pre-push`, runner, runScript("pre-push", changed));
 } else {
   const biome = join("node_modules", ".bin", process.platform === "win32" ? "biome.cmd" : "biome");
-  if (existsSync(biome)) {
+  if (scripts.lint) {
+    step(`${pm} run lint`, runner, runScript("lint"));
+  } else if (existsSync(biome)) {
     step("biome", biome, [
       "check",
       "--no-errors-on-unmatched",
