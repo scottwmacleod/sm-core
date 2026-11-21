@@ -12,7 +12,9 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `dist/sm-core.css` | `--sm-*` custom properties for dark (default), light (OS) and `[data-theme]`; reduced-motion, high-contrast, forced-colours and print overrides; the `.sm-mark`, `.sm-cursor` and `.sm-credit` classes. Works anywhere CSS does. |
 | `dist/sm-tailwind.css` | A Tailwind 4 `@theme inline` block that maps the tokens to utilities: `bg-ground`, `text-ink-muted`, `p-space-4`, `rounded-1`, `text-ui-sm`, `ease-sm-out`. |
 | `dist/logos/` | Outlined wordmarks (`<name>-wordmark-dark.svg` for dark grounds, `-light.svg` for light) and icons: `-favicon.svg`, `-favicon-16/32.png`, `-icon.svg`, `-icon-192/512.png`, `-icon-maskable-512.png`, `-apple-touch-icon.png`. |
-| `tooling/biome.base.json` | Biome base (formatter and lint rules). Products `extends` it from `vendor/sm-core/tooling/`. |
+| `tooling/oxlintrc.base.json` | `bun lint` base: every rule on except those ADR-0010 explains. Products `extends` it from `vendor/sm-core/tooling/`. |
+| `tooling/oxfmtrc.json` | `bun fmt` config. Sync installs it at the product's root as `.oxfmtrc.json`. |
+| `tooling/biome.base.json` | Biome base, for what `bun lint` can't check: CSS (the recommended rules) and 9 JavaScript rules. Formatter off. Products `extends` it from `vendor/sm-core/tooling/`. |
 | `tooling/tsconfig.base.json` | TypeScript base: ES2022, `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. Products `extends` it. |
 | `tooling/github/` | The PR template and the bug and feature issue forms. Sync installs them into `.github/`. |
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
@@ -51,6 +53,8 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 **Configs:** extend the bases rather than copying them.
 
 ```jsonc
+// .oxlintrc.json
+{ "extends": ["./vendor/sm-core/tooling/oxlintrc.base.json"], "ignorePatterns": ["dist", "vendor"] }
 // biome.json
 { "extends": ["./vendor/sm-core/tooling/biome.base.json"], "files": { "includes": ["src/**"] } }
 // tsconfig.json
