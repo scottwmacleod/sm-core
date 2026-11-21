@@ -8,6 +8,6 @@ The reusable workflows in `.github/workflows/` make these choices on purpose.
 - The concurrency group includes `workspace`, so sm-core's npm and Bun calls of `web-ci.yml` in one workflow don't cancel each other.
 - Checkouts are blobless, not shallow: full history, with file contents fetched on demand.
 - `budgets.yml` uses the same `node_modules` cache key as `web-ci.yml` (a Bun product's key names Bun, not Node), so the two share one cache. Whichever job installs first saves it, and `main`'s runs seed it for every PR.
-- Lighthouse runs once and never retries. The retry plus median from v26.11.8 is gone; ADR-0010 says why and what replaced it.
+- Lighthouse runs once and never retries. The retry plus median from v26.11.8 is gone; ADR-0011 says why and what replaced it.
 - `auto-merge.yml`'s concurrency group cancels in progress, so label changes in quick succession settle on the last one.
 - `audit.yml` is never a required check: a new advisory would turn unrelated PRs red.
