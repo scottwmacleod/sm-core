@@ -285,7 +285,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.workspace, inputs.package-manager == 'bun' && 'bun.lock' || 'package-lock.json')) }}
+          key: sm-playwright-debs-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.workspace, inputs.package-manager == 'bun' && 'bun.lock' || 'package-lock.json')) }}
 
       - name: Install Playwright browser
         if: steps.plan.outputs.skip != 'true' && startsWith(matrix.task, 'e2e')
@@ -293,11 +293,29 @@ jobs:
           X: ${{ inputs.package-manager == 'bun' && 'bunx' || 'npx' }}
           HIT: ${{ steps.browsers.outputs.cache-hit }}
         run: |
+          debs=~/.cache/ms-playwright/sm-debs
+          missing() {
+            { $X playwright install-deps --dry-run chromium-headless-shell 2> /dev/null || true; } |
+              sed -n 's/^  \([a-z0-9][a-z0-9.+-]*\)$/\1/p'
+          }
           if [ "$HIT" = true ]; then
-            $X playwright install-deps --dry-run chromium-headless-shell ||
-              $X playwright install-deps chromium-headless-shell > /dev/null
+            need=$(missing)
+            if [ -n "$need" ]; then
+              files=()
+              for pkg in $need; do
+                for f in "$debs/${pkg}"_*.deb; do [ -e "$f" ] && files+=("$f"); done
+              done
+              if [ "${#files[@]}" -gt 0 ]; then sudo dpkg -i "${files[@]}" > /dev/null || true; fi
+              $X playwright install-deps --dry-run chromium-headless-shell > /dev/null ||
+                $X playwright install-deps chromium-headless-shell > /dev/null
+            fi
           else
+            need=$(missing)
             $X playwright install --with-deps --only-shell chromium
+            if [ -n "$need" ]; then
+              mkdir -p "$debs"
+              (cd "$debs" && apt-get download $need > /dev/null)
+            fi
           fi
 
       - name: Save Playwright browsers
