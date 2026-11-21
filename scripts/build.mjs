@@ -1,10 +1,3 @@
-// Generates dist/sm-core.css and dist/sm-tailwind.css from tokens.json.
-//
-//   node scripts/build.mjs          write dist/
-//   node scripts/build.mjs --check  fail if dist/ has drifted, a name is invalid
-//                                   or a contrast pair in tokens.json fails
-//
-// tokens.json is the source of truth; never hand-edit dist/. No dependencies.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,14 +27,12 @@ const lh = (v) => (typeof v === "number" ? String(v) : v);
 export function css(doc) {
   const v = doc.version;
   let o = `/* sm_ core ${v}: generated from tokens.json by scripts/build.mjs. Do not edit. */\n`;
-  o += "/* Dark is the default; light follows the OS unless [data-theme] forces one. */\n\n";
+  o += "\n";
 
   o += `:root,\n[data-theme="dark"] {\n${colourBlock(doc, "dark", "  ")}}\n\n`;
   o += `@media (prefers-color-scheme: light) {\n  :root:not([data-theme="dark"]) {\n${colourBlock(doc, "light", "    ")}  }\n}\n\n`;
   o += `[data-theme="light"] {\n${colourBlock(doc, "light", "  ")}}\n\n`;
 
-  // Metric-matched fallbacks: a local system font scaled to Geist's widths and
-  // line metrics, so the swap to the real font shifts no text.
   for (const f of doc.type.fallbacks) {
     o += `@font-face {\n  font-family: "${f.family}";\n  src: ${f.local.map((n) => `local("${n}")`).join(", ")};\n`;
     o += `  size-adjust: ${f.sizeAdjust};\n  ascent-override: ${f.ascent};\n  descent-override: ${f.descent};\n  line-gap-override: ${f.lineGap};\n}\n\n`;
@@ -68,9 +59,7 @@ export function css(doc) {
 
   o += `@media print {\n  :root {\n${colourBlock(doc, "light", "    ")}  }\n}\n\n`;
 
-  o += `/* The mark: a lowercase name in Geist Mono 600 and the lime cursor.
-   <span class="sm-mark">sm<span class="sm-cursor" aria-hidden="true"></span></span> */
-@keyframes sm-blink {
+  o += `@keyframes sm-blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
 }
@@ -94,9 +83,6 @@ export function css(doc) {
   animation: sm-blink var(${P}duration-blink) steps(1) infinite;
 }
 
-/* The credit:
-   <a class="sm-credit" href="https://scottmacleod.co">shipped by
-     <span class="sm-mark">sm<span class="sm-cursor" aria-hidden="true"></span></span></a> */
 .sm-credit {
   display: inline-flex;
   align-items: center;
@@ -119,8 +105,6 @@ export function css(doc) {
   .sm-credit { border-color: LinkText; }
 }
 
-/* Still on screen under reduced motion, and in print. These come after
-   .sm-cursor so they win. */
 @media (prefers-reduced-motion: reduce) {
   .sm-cursor { animation: none; }
 }
@@ -132,8 +116,6 @@ export function css(doc) {
   return o;
 }
 
-// A media-query override only wins when it comes after the rule it overrides,
-// because both have the same specificity.
 export function orderProblems(text) {
   const base = text.indexOf("\n.sm-cursor {");
   const out = [];
@@ -146,9 +128,7 @@ export function orderProblems(text) {
 }
 
 export function tailwind(doc) {
-  let o = `/* sm_ core ${doc.version}: Tailwind 4 theme, generated from tokens.json. Do not edit.
-   Import after tailwindcss and sm-core.css. Utilities read the --sm-* variables,
-   so light and dark follow sm-core.css. */\n\n@theme inline {\n`;
+  let o = `/* sm_ core ${doc.version}: Tailwind 4 theme, generated from tokens.json. Do not edit. */\n\n@theme inline {\n`;
   for (const t of doc.color.tokens) o += `  --color-${t.name}: var(${P}${t.name});\n`;
   for (const name of Object.keys(doc.type.families)) o += `  --font-${name}: var(${P}font-${name});\n`;
   for (const t of doc.spacing.tokens) o += `  --spacing-${t.name}: var(${P}${t.name});\n`;
@@ -166,24 +146,21 @@ export function tailwind(doc) {
   return o;
 }
 
-// WCAG 2 contrast for #rrggbb pairs.
-function lum(hex) {
+function wcagLuminance(hex) {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const [r, g, b] = c.map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 export function ratio(a, b) {
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  const [hi, lo] = [wcagLuminance(a), wcagLuminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
 
 export function problems(doc) {
   const out = [];
-  // CalVer: YY.MM, plus .N for a second release in the same month.
   if (!/^\d{2}\.(0[1-9]|1[0-2])(\.[1-9]\d*)?$/.test(String(doc.version))) {
     out.push(`version "${doc.version}" must be YY.MM or YY.MM.N`);
   }
-  // Every fallback face must be used by a family stack, or it does nothing.
   for (const f of doc.type.fallbacks) {
     if (!Object.values(doc.type.families).some((stack) => stack.includes(`"${f.family}"`))) {
       out.push(`fallback font "${f.family}" is in no family stack`);

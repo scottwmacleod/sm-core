@@ -1,28 +1,5 @@
 name: budgets
 
-# Speed as a checked rule: bundle size and Lighthouse against a product's
-# build. Builds once, then runs either check or both. Fails over a limit with
-# a message naming the limit, and keeps one size comment on the PR up to date.
-#
-# Caller:
-#   on:
-#     pull_request:
-#     push:
-#       branches: [main]          # main's runs record the "before" sizes
-#     schedule:
-#       - cron: "41 4 * * *"      # also daily: auto-merged pushes start no runs
-#   permissions:
-#     contents: read
-#     pull-requests: write        # for the size comment
-#   jobs:
-#     budgets:
-#       uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.3
-#       with:
-#         dist-dir: apps/web/dist
-#         js-kb: 120
-#         css-kb: 20
-#         package-manager: bun     # a Bun product; npm is the default
-
 on:
   workflow_call:
     inputs:
@@ -119,7 +96,6 @@ concurrency:
 jobs:
   budgets:
     runs-on: ubuntu-latest
-    # A hang guard only. budget-seconds is the real limit.
     timeout-minutes: 15
     defaults:
       run:
@@ -168,7 +144,6 @@ jobs:
             ${{ inputs.workspace }}/node_modules
             ${{ inputs.workspace }}/*/node_modules
             ${{ inputs.workspace }}/*/*/node_modules
-          # Same key as web-ci.yml, so the two share one cache.
           key: >-
             ${{ inputs.package-manager == 'bun'
               && format('sm-modules-{0}-node{1}-bun{2}-{3}', runner.os, steps.node.outputs.node-version, steps.bun.outputs.version, hashFiles(format('{0}/bun.lock', inputs.workspace)))
@@ -191,7 +166,6 @@ jobs:
           esac
           bash -eo pipefail -c "$CMD"
 
-      # main's runs save their sizes; a PR restores the newest one as "before".
       - name: Restore main's sizes
         if: inputs.size && github.event_name == 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -301,12 +275,9 @@ jobs:
               $lhci upload --config=.sm-lighthouserc.json || true
               exit 1
             fi
-            # A shared runner's single score swings a lot. Run again, fresh, and
-            # assert on the median: noise washes out, a regression doesn't.
             echo "::notice title=Lighthouse retry::A score missed on the first pass; running $RETRY_RUNS more times and asserting on the median."
             retry_started=$(date +%s)
             $lhci collect --config=.sm-lighthouserc.json --numberOfRuns="$RETRY_RUNS"
-            # Not part of the job's own time (see budget-seconds).
             echo "SM_STARTED=$(( SM_STARTED + $(date +%s) - retry_started ))" >> "$GITHUB_ENV"
             status=0
             $lhci assert --config=.sm-lighthouserc.json || status=$?

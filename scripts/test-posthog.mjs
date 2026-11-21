@@ -1,8 +1,3 @@
-// Checks tooling/analytics/sm-posthog.js against a fake browser.
-//
-//   node scripts/test-posthog.mjs
-//
-// Part of `npm run check`. No dependencies.
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -11,10 +6,9 @@ const file = pathToFileURL(
 );
 const failures = [];
 const check = (name, ok) => ok || failures.push(name);
-let n = 0;
+let cacheBust = 0;
 
-// A fresh copy of the module (it keeps per-page state) in a fresh fake browser.
-async function page({ nav = {}, storage = {}, flagsReply, ready = "complete" } = {}) {
+async function freshPage({ nav = {}, storage = {}, flagsReply, ready = "complete" } = {}) {
   const listeners = {};
   const appended = [];
   const fetches = [];
@@ -49,14 +43,13 @@ async function page({ nav = {}, storage = {}, flagsReply, ready = "complete" } =
     return { ok: true, json: async () => flagsReply ?? { flags: {} } };
   };
   delete globalThis.posthog;
-  const mod = await import(`${file.href}?${n++}`);
+  const mod = await import(`${file.href}?${cacheBust++}`);
   const settle = () => new Promise((r) => setTimeout(r, 0));
   return { mod, listeners, appended, fetches, idles, ls, settle };
 }
 
-// readFlags turns the /flags v2 answer into variant values.
 {
-  const { mod } = await page();
+  const { mod } = await freshPage();
   const v = mod.readFlags({
     flags: {
       a: { enabled: true, variant: "test" },
@@ -71,20 +64,18 @@ async function page({ nav = {}, storage = {}, flagsReply, ready = "complete" } =
   check("readFlags tolerates an empty answer", Object.keys(mod.readFlags(undefined)).length === 0);
 }
 
-// Opted-out visitors get nothing.
 for (const nav of [{ globalPrivacyControl: true }, { doNotTrack: "1" }]) {
-  const p = await page({ nav });
+  const p = await freshPage({ nav });
   p.mod.startPostHog({ token: "phc_x", product: "site" });
   p.idles.forEach((f) => f());
   check(`opted out (${Object.keys(nav)[0]}): no queue`, globalThis.posthog === undefined);
   check(`opted out (${Object.keys(nav)[0]}): no script`, p.appended.length === 0);
   check(`opted out (${Object.keys(nav)[0]}): flag is undefined`, p.mod.flag("a") === undefined);
-  p.mod.capture("x"); // must not throw
+  p.mod.capture("x");
 }
 
-// A normal page: queue now, script only once idle, product registered.
 {
-  const p = await page();
+  const p = await freshPage();
   p.mod.startPostHog({ token: "phc_x", product: "rollin" });
   check("queue exists straight away", Array.isArray(globalThis.posthog));
   check(
@@ -116,19 +107,17 @@ for (const nav of [{ globalPrivacyControl: true }, { doNotTrack: "1" }]) {
   check("script loads only once", p.appended.length === 1);
 }
 
-// A tap before idle loads the script.
 {
-  const p = await page({ ready: "loading" });
+  const p = await freshPage({ ready: "loading" });
   p.mod.startPostHog({ token: "phc_x", product: "site" });
   p.listeners.pointerdown.forEach((f) => f());
   await p.settle();
   check("first tap loads the script", p.appended.length === 1);
 }
 
-// Experiments: early flags with PostHog's own id, bootstrapped, exposure once.
 {
   const saved = { ph_phc_x_posthog: JSON.stringify({ distinct_id: "visitor-1" }) };
-  const p = await page({
+  const p = await freshPage({
     storage: saved,
     flagsReply: { flags: { hero: { enabled: true, variant: "test" } } },
   });
@@ -159,16 +148,14 @@ for (const nav of [{ globalPrivacyControl: true }, { doNotTrack: "1" }]) {
   check("SDK bootstrapped with the flags", config?.bootstrap.featureFlags.hero === "test");
 }
 
-// The next visit renders the cached variant before PostHog answers.
 {
-  const p = await page({ storage: { sm_ph_flags: JSON.stringify({ hero: "test" }) } });
+  const p = await freshPage({ storage: { sm_ph_flags: JSON.stringify({ hero: "test" }) } });
   p.mod.startPostHog({ token: "phc_x", product: "site", flags: true });
   check("cached variant available synchronously", p.mod.flag("hero") === "test");
 }
 
-// Errors before PostHog loads are queued, then left to PostHog once it has loaded.
 {
-  const p = await page({ ready: "loading" });
+  const p = await freshPage({ ready: "loading" });
   p.mod.startPostHog({ token: "phc_x", product: "site" });
   const boom = new Error("boom");
   p.listeners.error.forEach((f) => f({ error: boom }));
@@ -182,7 +169,8 @@ for (const nav of [{ globalPrivacyControl: true }, { doNotTrack: "1" }]) {
     globalThis.posthog.at(-1)?.[2]?.where === "boundary",
   );
   const q = globalThis.posthog;
-  globalThis.posthog = { captureException: () => {} }; // PostHog has loaded
+  const loadedPostHog = { captureException: () => {} };
+  globalThis.posthog = loadedPostHog;
   p.listeners.error.forEach((f) => f({ error: boom }));
   check(
     "no early capture once PostHog has loaded",

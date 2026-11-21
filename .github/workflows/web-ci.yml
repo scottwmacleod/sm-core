@@ -1,12 +1,5 @@
 name: web-ci
 
-# The sm_ suite's shared CI for a web project on npm or Bun. Products call it at a
-# pinned tag and add a small `ci` job that the branch rule requires (see the
-# README). Lint, typecheck, unit tests, build and browser tests run as
-# parallel jobs. Each job has a time budget and fails when it runs past it.
-# Rules: no retries, no continue-on-error, no skipped tests. A check that
-# needs a retry has a bug.
-
 on:
   workflow_call:
     inputs:
@@ -88,14 +81,11 @@ permissions:
   contents: read
 
 concurrency:
-  # The workspace keeps two calls in one workflow (sm-core's npm and Bun runs) apart.
   group: sm-web-ci-${{ github.repository }}-${{ github.workflow }}-${{ inputs.workspace }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   plan:
-    # Decides which jobs run. Needs no checkout: it asks the API for the PR's
-    # files. Fails open: anything other than a docs-only PR runs everything.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -123,7 +113,6 @@ jobs:
           case "$PM" in
             npm) ;;
             bun)
-              # The shared npm defaults, in Bun's words. Anything else runs as given.
               if [ "$LINT" = "npm run lint" ]; then LINT="bun run lint"; fi
               if [ "$TEST" = "npm test" ]; then TEST="bun run test"; fi
               if [ "$BUILD" = "npm run build" ]; then BUILD="bun run build"; fi
@@ -139,7 +128,6 @@ jobs:
             fi
           fi
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
-          # The lint job always runs: it is where verify.mjs and `checks` run.
           [ -z "$LINT" ] && LINT=true
           matrix=$(jq -cn \
             --arg lint "$LINT" --arg typecheck "$TYPECHECK" --arg test "$TEST" --arg build "$BUILD" --arg e2e "$E2E" \
@@ -159,7 +147,6 @@ jobs:
     if: needs.plan.outputs.skip != 'true'
     name: ${{ matrix.task }}
     runs-on: ubuntu-latest
-    # A hang guard only. The budget below is the real limit.
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -172,7 +159,6 @@ jobs:
         working-directory: .
         run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
-      # Blobless, not shallow: full history, file contents fetched on demand.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           filter: blob:none
@@ -185,7 +171,6 @@ jobs:
           node-version: ${{ inputs.node-version }}
           node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
 
-      # A bun product gets Bun in every job; an npm product only for a bun typecheck.
       - name: Bun version
         id: bun
         if: inputs.package-manager == 'bun' || (matrix.task == 'typecheck' && startsWith(matrix.run, 'bun '))
@@ -206,7 +191,6 @@ jobs:
         with:
           bun-version: ${{ steps.bun.outputs.version }}
 
-      # npm products keep the key they always had, so their cache carries over.
       - name: Restore node_modules
         id: modules
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -224,7 +208,6 @@ jobs:
         if: steps.modules.outputs.cache-hit != 'true'
         run: ${{ inputs.package-manager == 'bun' && 'bun install --frozen-lockfile' || 'npm ci --no-audit --no-fund' }}
 
-      # Saved by whichever job installs first; main's runs seed it for every PR.
       - name: Save node_modules
         if: steps.modules.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -258,7 +241,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.workspace, inputs.package-manager == 'bun' && 'bun.lock' || 'package-lock.json')) }}
 
-      # The workspace root's own Playwright, so the browser matches it.
       - name: Install Playwright browser
         if: matrix.task == 'e2e'
         env:
@@ -278,9 +260,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browsers.outputs.cache-primary-key }}
 
-      # Browser setup (apt mirrors, the browser download) varies by tens of
-      # seconds from run to run and isn't ours to fix. The e2e budget times the
-      # tests, so a slow mirror can't fail a PR but slow tests still do.
       - name: Restart the clock after browser setup
         if: matrix.task == 'e2e'
         working-directory: .
@@ -308,8 +287,6 @@ jobs:
           fi
 
   result:
-    # One job to depend on. Passes when every planned job passed, or when the
-    # PR only touched skip-paths.
     needs: [plan, check]
     if: always()
     runs-on: ubuntu-latest

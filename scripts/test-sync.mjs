@@ -1,10 +1,3 @@
-// Proves sync.mjs and verify.mjs work together, in a throwaway product repo.
-//
-//   node scripts/test-sync.mjs
-//
-// Part of `npm run check`. No dependencies. verify.mjs must work on Node and on
-// Bun (Bun products run it either way), so every case runs under both when Bun
-// is installed. sm-core's CI also runs this file on Bun (scripts/fixtures/bun-caller).
 import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,7 +32,6 @@ const at = (p) => join(product, p);
 const PR = ".github/pull_request_template.md";
 
 try {
-  // A product with its own section below the marker keeps it through a sync.
   mkdirSync(at(".github"), { recursive: true });
   writeFileSync(at(PR), "old shared text\n<!-- product -->\n\n## Test checklist\n\n- [ ]\n");
   sync();
@@ -47,12 +39,18 @@ try {
   if (!pr.includes("## Merge Danger") || !pr.includes("## Test checklist")) {
     failures.push("sync didn't merge the shared PR template with the product's own section");
   }
+  const skill = "tooling/skills/delete-comment/SKILL.md";
+  if (readFileSync(at(".claude/skills/delete-comment/SKILL.md"), "utf8") !== readFileSync(join(root, skill), "utf8")) {
+    failures.push("sync didn't install the /delete-comment skill");
+  }
+  if (readFileSync(join(root, ".claude/skills/delete-comment/SKILL.md"), "utf8") !== readFileSync(join(root, skill), "utf8")) {
+    failures.push(`sm-core's own .claude/skills/delete-comment/SKILL.md differs from ${skill}; copy it over`);
+  }
   if (!(statSync(at("vendor/sm-core/tooling/hooks/pre-push")).mode & 0o111)) {
     failures.push("the synced pre-push hook isn't executable");
   }
 
   expect("fresh sync", true);
-  // A Bun product (rollin, planning-poker) has bun.lock and packageManager.
   expect("Bun product", true, () => {
     writeFileSync(at("package.json"), JSON.stringify({ name: "product", private: true, packageManager: "bun@1.4.5" }));
     writeFileSync(at("bun.lock"), "{}\n");

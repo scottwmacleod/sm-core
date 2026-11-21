@@ -1,0 +1,7 @@
+{
+  "ignore": [],
+  "files": {
+    "dist/sm-core.css": 1,
+    "dist/sm-tailwind.css": 1
+  }
+}

@@ -1,8 +1,5 @@
 name: ci
 
-# sm-core runs its own shared workflow, so every change to web-ci.yml is
-# proven here before it's tagged.
-
 on:
   pull_request:
   push:
@@ -10,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read # lets web-ci list a PR's files for skip-paths
+  pull-requests: read
 
 jobs:
   web:
@@ -24,8 +21,6 @@ jobs:
       lint-budget-seconds: 30
       test-budget-seconds: 45
 
-  # The same workflow as a Bun product calls it: Bun from packageManager,
-  # bun.lock, `bun run` defaults, and the sync/verify test on Bun's runtime.
   web-bun:
     uses: ./.github/workflows/web-ci.yml
     with:
@@ -37,7 +32,6 @@ jobs:
       test-budget-seconds: 45
       build-budget-seconds: 30
 
-  # The check to require: passes only when every web-ci job did.
   ci:
     needs: [web, web-bun]
     if: always()

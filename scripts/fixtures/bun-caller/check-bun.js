@@ -1,4 +1,3 @@
-// Fails unless CI set up the Bun version named in packageManager.
 import pkg from "./package.json";
 
 const want = pkg.packageManager.replace(/^bun@/, "").split("+")[0];
