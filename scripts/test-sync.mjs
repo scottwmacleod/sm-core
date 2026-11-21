@@ -49,8 +49,10 @@ try {
   if (readFileSync(at(".oxfmtrc.json"), "utf8") !== readFileSync(join(root, "tooling/oxfmtrc.json"), "utf8")) {
     failures.push("sync didn't install the shared bun fmt config at .oxfmtrc.json");
   }
-  if (!(statSync(at("vendor/sm-core/tooling/hooks/pre-push")).mode & 0o111)) {
-    failures.push("the synced pre-push hook isn't executable");
+  for (const hook of ["pre-commit", "pre-push"]) {
+    if (!(statSync(at(`vendor/sm-core/tooling/hooks/${hook}`)).mode & 0o111)) {
+      failures.push(`the synced ${hook} hook isn't executable`);
+    }
   }
 
   expect("fresh sync", true);
