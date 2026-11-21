@@ -49,6 +49,14 @@ on:
         description: Run browser tests (Playwright with axe).
         type: boolean
         default: false
+      e2e-shards:
+        description: >-
+          Split the browser tests across this many jobs (1-4), each named
+          `e2e k/n`. Each job gets SM_E2E_SHARD=k/n; the product's Playwright
+          config turns it into `shard`, and should prove in its checks that the
+          shards together list every test.
+        type: number
+        default: 1
       e2e-command:
         type: string
         default: npm run e2e
@@ -96,7 +104,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: ${{ fromJSON(format('["checks"{0}{1}]', inputs.test-command != '' && ',"test"' || '', inputs.e2e && ',"e2e"' || '')) }}
+        task: >-
+          ${{ fromJSON(format('["checks"{0}{1}]',
+            inputs.test-command != '' && ',"test"' || '',
+            !inputs.e2e && '' ||
+            inputs.e2e-shards == 2 && ',"e2e 1/2","e2e 2/2"' ||
+            inputs.e2e-shards == 3 && ',"e2e 1/3","e2e 2/3","e2e 3/3"' ||
+            inputs.e2e-shards == 4 && ',"e2e 1/4","e2e 2/4","e2e 3/4","e2e 4/4"' ||
+            ',"e2e"')) }}
     defaults:
       run:
         working-directory: ${{ inputs.workspace }}
@@ -147,7 +162,7 @@ jobs:
             case "$TASK" in
               checks) echo "budget=$B_CHECKS" ;;
               test) echo "run=$TEST"; echo "budget=$B_TEST" ;;
-              e2e) echo "run=$E2E"; echo "budget=$B_E2E" ;;
+              e2e*) echo "run=$E2E"; echo "budget=$B_E2E"; shard=${TASK#e2e}; echo "shard=${shard# }" ;;
             esac
           } >> "$GITHUB_OUTPUT"
 
@@ -257,7 +272,7 @@ jobs:
           fi
 
       - name: Restore Playwright browsers
-        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e'
+        if: steps.plan.outputs.skip != 'true' && startsWith(matrix.task, 'e2e')
         id: browsers
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -265,7 +280,7 @@ jobs:
           key: sm-playwright-${{ runner.os }}-${{ hashFiles(format('{0}/{1}', inputs.workspace, inputs.package-manager == 'bun' && 'bun.lock' || 'package-lock.json')) }}
 
       - name: Install Playwright browser
-        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e'
+        if: steps.plan.outputs.skip != 'true' && startsWith(matrix.task, 'e2e')
         env:
           X: ${{ inputs.package-manager == 'bun' && 'bunx' || 'npx' }}
           HIT: ${{ steps.browsers.outputs.cache-hit }}
@@ -277,14 +292,14 @@ jobs:
           fi
 
       - name: Save Playwright browsers
-        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e' && steps.browsers.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.skip != 'true' && startsWith(matrix.task, 'e2e') && steps.browsers.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browsers.outputs.cache-primary-key }}
 
       - name: Restart the clock after browser setup
-        if: steps.plan.outputs.skip != 'true' && matrix.task == 'e2e'
+        if: steps.plan.outputs.skip != 'true' && startsWith(matrix.task, 'e2e')
         working-directory: .
         run: echo "SM_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
@@ -292,6 +307,7 @@ jobs:
         if: steps.plan.outputs.skip != 'true' && matrix.task != 'checks'
         env:
           CMD: ${{ steps.plan.outputs.run }}
+          SM_E2E_SHARD: ${{ steps.plan.outputs.shard }}
         run: bash -eo pipefail -c "$CMD"
 
       - name: Within budget
