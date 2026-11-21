@@ -228,6 +228,14 @@ jobs:
             ${{ inputs.workspace }}/*/*/node_modules
           key: ${{ steps.modules.outputs.cache-primary-key }}
 
+      - name: Restore Bun's package cache
+        if: steps.plan.outputs.skip != 'true' && inputs.package-manager == 'bun'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: sm-bun-cache-${{ runner.os }}-${{ hashFiles(format('{0}/package.json', inputs.workspace), format('{0}/bun.lock', inputs.workspace)) }}
+          restore-keys: sm-bun-cache-${{ runner.os }}-
+
       - name: Checks, lint, typecheck and build
         if: steps.plan.outputs.skip != 'true' && matrix.task == 'checks'
         env:
