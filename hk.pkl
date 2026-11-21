@@ -1,0 +1,18 @@
+amends "tooling/hooks/hk/Config.pkl"
+
+hooks {
+  ["pre-commit"] {
+    steps {
+      ["no-comments"] {
+        check = "node tooling/lint/no-comments.mjs"
+      }
+    }
+  }
+  ["pre-push"] {
+    steps {
+      ["check"] {
+        check = "npm run --silent check"
+      }
+    }
+  }
+}

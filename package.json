@@ -9,8 +9,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "prepare": "node tooling/hooks/install.mjs",
     "build": "node scripts/build.mjs",
-    "check": "node scripts/build.mjs --check && node scripts/test-sync.mjs && node scripts/test-posthog.mjs && node scripts/test-pre-push.mjs && node scripts/test-no-comments.mjs && node tooling/lint/no-comments.mjs",
+    "check": "node scripts/build.mjs --check && node scripts/test-sync.mjs && node scripts/test-posthog.mjs && node scripts/test-hooks.mjs && node scripts/test-no-comments.mjs && node tooling/lint/no-comments.mjs",
     "logos": "node scripts/logos.mjs",
     "sync": "node scripts/sync.mjs"
   },
