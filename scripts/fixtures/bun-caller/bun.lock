@@ -7,6 +7,9 @@
       "dependencies": {
         "greet": "workspace:*",
       },
+      "devDependencies": {
+        "playwright": "1.65.1",
+      },
     },
     "packages/greet": {
       "name": "greet",
@@ -15,5 +18,9 @@
   },
   "packages": {
     "greet": ["greet@workspace:packages/greet"],
+
+    "playwright": ["playwright@1.65.1", "", { "dependencies": { "playwright-core": "1.65.1" }, "bin": { "playwright": "cli.js" } }, "sha512-vJ1FuoOrNwOKHUIVEvSt3jT1L+wjjDpwhwIstKtfvTh8XIG4FG4bIFuvNdMxi81LGfAhUgUZleVFaOLY4RIUUw=="],
+
+    "playwright-core": ["playwright-core@1.65.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw=="],
   }
 }
