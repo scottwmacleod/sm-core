@@ -8,4 +8,6 @@ It counts comment lines per file against `comments-baseline.json`, and the count
 
 Tool directives aren't comments: `biome-ignore`, `@ts-expect-error` and similar, a shebang, and the `# v7.0.1` that Dependabot keeps beside a SHA-pinned action. sm-core's generated CSS keeps its one-line "generated, do not edit" header, which the baseline records.
 
+The baseline is written in Biome's own format, so a product's `biome check` passes on it. `biome.base.json` turns Biome's Markdown formatter off: Biome 2.6 reads a skill's YAML frontmatter as a rule and a heading, and would break `.claude/skills/delete-comment/SKILL.md` and reflow the synced docs, which `verify.mjs` then rejects.
+
 `/delete-comment` (`tooling/skills/delete-comment/`) repeats the cleanup. Its first rule is Scott's: don't remove a fence until you know why it was put up.

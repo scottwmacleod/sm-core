@@ -179,7 +179,7 @@ permissions:
   pull-requests: write   # for the size comment
 jobs:
   budgets:
-    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.14
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.15
     with:
       dist-dir: apps/web/dist
       js-kb: 120
@@ -196,7 +196,7 @@ permissions:
   pull-requests: write
 jobs:
   auto-merge:
-    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.14
+    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.15
     secrets:
       merge-token: ${{ secrets.SM_MERGE_TOKEN }}
 ```
@@ -209,7 +209,7 @@ permissions:
   pull-requests: write
 jobs:
   dependabot:
-    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.14
+    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.15
 ```
 
 ```yaml
@@ -225,7 +225,7 @@ permissions:
   contents: read
 jobs:
   audit:
-    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.14
+    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.15
 ```
 
 ```yaml
@@ -239,7 +239,7 @@ permissions:
   issues: write
 jobs:
   behind:
-    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.14
+    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.15
 ```
 
 ### Bun products
@@ -282,7 +282,7 @@ node vendor/sm-core/tooling/lint/no-comments.mjs --update   # after deleting com
 node vendor/sm-core/tooling/lint/no-comments.mjs --report   # comment lines per file, and how many lines deleting them all sheds
 ```
 
-Run it from the repo root (Bun products: `bun vendor/...`). Add it to web-ci's `checks` input or to the `lint` script. Paths listed in the baseline's `ignore` (generated files, such as `worker-configuration.d.ts`) and the `vendor/sm-core` copy are never read. To clear the backlog, run `/delete-comment` (sync installs it at `.claude/skills/delete-comment/`).
+Run it from the repo root (Bun products: `bun vendor/...`). Add it to web-ci's `checks` input or to the `lint` script. Paths listed in the baseline's `ignore`, the `vendor/sm-core` copy and well-known generated files (`worker-configuration.d.ts`, `*.gen.ts`) are never read. The baseline is written the way Biome formats it, so `biome check` passes on it. To clear the backlog, run `/delete-comment` (sync installs it at `.claude/skills/delete-comment/`).
 
 ## Changing the brand
 
