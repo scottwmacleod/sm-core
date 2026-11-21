@@ -294,7 +294,8 @@ jobs:
           HIT: ${{ steps.browsers.outputs.cache-hit }}
         run: |
           if [ "$HIT" = true ]; then
-            $X playwright install-deps chromium-headless-shell > /dev/null
+            $X playwright install-deps --dry-run chromium-headless-shell ||
+              $X playwright install-deps chromium-headless-shell > /dev/null
           else
             $X playwright install --with-deps --only-shell chromium
           fi
