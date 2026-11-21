@@ -31,6 +31,9 @@ jobs:
       lint-budget-seconds: 30
       test-budget-seconds: 45
       build-budget-seconds: 30
+      e2e: true
+      e2e-shards: 2
+      e2e-budget-seconds: 10
 
   ci:
     needs: [web, web-bun]

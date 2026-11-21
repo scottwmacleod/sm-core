@@ -1,6 +1,6 @@
 # sm-core
 
-Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin): `tokens.json` generates `dist/`, `tooling/` holds the shared configs, templates, agent docs and pre-push hook, and products keep a synced, hash-checked copy of both. See README.md.
+Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin): `tokens.json` generates `dist/`, `tooling/` holds the shared configs, templates, agent docs and hk git hooks, and products keep a synced, hash-checked copy of both. See README.md.
 
 ## Commands
 

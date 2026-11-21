@@ -1,6 +1,6 @@
 # sm-core
 
-The brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin): design tokens, the generated CSS, every mark and icon, and the shared engineering files (configs, templates, agent docs and a pre-push hook). Each product keeps a pinned copy, so the suite looks and works the same everywhere and changes on purpose.
+The brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin): design tokens, the generated CSS, every mark and icon, and the shared engineering files (configs, templates, agent docs and git hooks). Each product keeps a pinned copy, so the suite looks and works the same everywhere and changes on purpose.
 
 The rules for using all of this are in the [sm_ core style guide](https://claude.ai/artifact/2xghCuwzxtMn5UfRsMUdHt).
 
@@ -12,13 +12,15 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `dist/sm-core.css` | `--sm-*` custom properties for dark (default), light (OS) and `[data-theme]`; reduced-motion, high-contrast, forced-colours and print overrides; the `.sm-mark`, `.sm-cursor` and `.sm-credit` classes. Works anywhere CSS does. |
 | `dist/sm-tailwind.css` | A Tailwind 4 `@theme inline` block that maps the tokens to utilities: `bg-ground`, `text-ink-muted`, `p-space-4`, `rounded-1`, `text-ui-sm`, `ease-sm-out`. |
 | `dist/logos/` | Outlined wordmarks (`<name>-wordmark-dark.svg` for dark grounds, `-light.svg` for light) and icons: `-favicon.svg`, `-favicon-16/32.png`, `-icon.svg`, `-icon-192/512.png`, `-icon-maskable-512.png`, `-apple-touch-icon.png`. |
-| `tooling/biome.base.json` | Biome base (formatter and lint rules). Products `extends` it from `vendor/sm-core/tooling/`. |
+| `tooling/oxlintrc.base.json` | `bun lint` base: every rule on except those ADR-0010 explains. Products `extends` it from `vendor/sm-core/tooling/`. |
+| `tooling/oxfmtrc.json` | `bun fmt` config. Sync installs it at the product's root as `.oxfmtrc.json`. |
+| `tooling/biome.base.json` | Biome base, for what `bun lint` can't check: CSS (the recommended rules) and 9 JavaScript rules. Formatter off. Products `extends` it from `vendor/sm-core/tooling/`. |
 | `tooling/tsconfig.base.json` | TypeScript base: ES2022, `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. Products `extends` it. |
 | `tooling/github/` | The PR template and the bug and feature issue forms. Sync installs them into `.github/`. |
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
 | `tooling/lint/no-comments.mjs` | The no-comments check with its ratchet. See **No comments**. |
 | `tooling/skills/delete-comment/` | The `/delete-comment` skill. Sync installs it at `.claude/skills/delete-comment/`. |
-| `tooling/hooks/` | The pre-push hook (format, lint and typecheck on changed files) and `install.mjs`, which points git at it. |
+| `tooling/hooks/` | The hk git hooks: `sm.pkl` (pre-commit formats and lints staged files, pre-push runs `check`), hk's schema in `hk/`, a fallback for machines without hk, and `install.mjs`, which points git at them. |
 | `tooling/analytics/sm-posthog.js` | The PostHog loader: queues calls, loads PostHog's script once the page is idle, and serves flags without flicker. See **PostHog**. |
 | `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
 | `.github/workflows/` | The shared CI, called by products at a release tag. See **Shared CI**. |
@@ -51,13 +53,15 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 **Configs:** extend the bases rather than copying them.
 
 ```jsonc
+// .oxlintrc.json
+{ "extends": ["./vendor/sm-core/tooling/oxlintrc.base.json"], "ignorePatterns": ["dist", "vendor"] }
 // biome.json
 { "extends": ["./vendor/sm-core/tooling/biome.base.json"], "files": { "includes": ["src/**"] } }
 // tsconfig.json
 { "extends": "./vendor/sm-core/tooling/tsconfig.base.json", "compilerOptions": { "lib": ["ES2022", "DOM"] } }
 ```
 
-**Pre-push hook:** add `"prepare": "node vendor/sm-core/tooling/hooks/install.mjs"` to `package.json`. It sets `core.hooksPath` and skips itself in CI. The hook runs Biome on the changed files and the `typecheck` script; a repo that needs something else defines a `pre-push` script, which gets the changed files as arguments. Scripts run on Bun when `packageManager` names `bun@` or `bun.lock` exists, and on npm otherwise.
+**Git hooks:** add `"prepare": "bun vendor/sm-core/tooling/hooks/install.mjs"` to `package.json` and an `hk.pkl` at the root that says `amends "vendor/sm-core/tooling/hooks/sm.pkl"`. Install [hk](https://hk.jdx.dev) with `mise use -g hk` or `brew install hk`. Pre-commit runs the `format` script on the staged files, stages the result, then runs `lint` on them; pre-push runs `check`, the same command as CI. `format` and `lint` must accept file paths (`lint` may check more than it's given). Without hk the hooks still run: `lint` on the staged files without fixing, and `check` on push. See ADR-0009.
 
 **Agent docs:** point `AGENTS.md` at `docs/agents/sm-conventions.md` and keep only what's specific to the product.
 
@@ -126,7 +130,7 @@ Reusable workflows in `.github/workflows/`. A product calls them at a release ta
 | Workflow | What it does |
 | --- | --- |
 | `web-ci.yml` | Lint (plus `verify.mjs` and any extra `checks`), typecheck, unit tests, build and optional Playwright, as parallel jobs. Blobless clone, `node_modules` and Playwright browsers cached, superseded PR runs cancelled, docs-only PRs skipped via `skip-paths`. Each job has a time budget (`*-budget-seconds`) and fails when it runs over; the e2e budget starts after browser setup, so a slow apt mirror can't fail a PR but slow tests still do. |
-| `budgets.yml` | Builds once, then checks gzipped JS and CSS against `js-kb` and `css-kb` (one size comment per PR, with main's last sizes as "before") and runs Lighthouse against the build or a `lighthouse-url`. Lighthouse runs once; if a score misses, it runs `lighthouse-retry-runs` (3) more times and asserts on the median, so one slow runner can't fail a PR (the retry's time isn't counted against `budget-seconds`). `lighthouse-skip-pages` leaves pages out, e.g. `/404.html`. Defaults match the site: accessibility 0.95, the rest 0.90. |
+| `budgets.yml` | Builds once, then checks gzipped JS and CSS against `js-kb` and `css-kb` (one size comment per PR, with main's last sizes as "before") and runs Lighthouse against the build or a `lighthouse-url`. Lighthouse runs once, with no retry, after Chrome's binary has been read into the page cache in the background (ADR-0011). `lighthouse-skip-pages` leaves pages out, e.g. `/404.html`. Defaults match the site: accessibility 0.95, the rest 0.90. |
 | `auto-merge.yml` | Squash auto-merge for non-draft PRs from the repo's own branches. A PR labelled `hold` (the `hold-label` input) is left for a person: adding the label turns auto-merge off, removing it turns it back on. Callers list `synchronize` in their trigger types, so a PR opened with a merge conflict gets auto-merge once a push resolves it. |
 | `dependabot-automerge.yml` | Auto-merge for Dependabot minor and patch updates. Majors wait for Scott. |
 | `audit.yml` | `npm audit --audit-level=high`, or `bun audit` with `package-manager: bun`. Not a required check. |
@@ -179,7 +183,7 @@ permissions:
   pull-requests: write   # for the size comment
 jobs:
   budgets:
-    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.18
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.17
     with:
       dist-dir: apps/web/dist
       js-kb: 120
@@ -196,7 +200,7 @@ permissions:
   pull-requests: write
 jobs:
   auto-merge:
-    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.18
+    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.17
     secrets:
       merge-token: ${{ secrets.SM_MERGE_TOKEN }}
 ```
@@ -209,7 +213,7 @@ permissions:
   pull-requests: write
 jobs:
   dependabot:
-    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.18
+    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.17
 ```
 
 ```yaml
@@ -225,7 +229,7 @@ permissions:
   contents: read
 jobs:
   audit:
-    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.18
+    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.17
 ```
 
 ```yaml
@@ -239,7 +243,7 @@ permissions:
   issues: write
 jobs:
   behind:
-    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.18
+    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.17
 ```
 
 ### Bun products

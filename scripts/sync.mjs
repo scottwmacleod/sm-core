@@ -14,6 +14,7 @@ export const INSTALL = {
   "tooling/agents/domain.md": "docs/agents/domain.md",
   "tooling/agents/sm-conventions.md": "docs/agents/sm-conventions.md",
   "tooling/skills/delete-comment/SKILL.md": ".claude/skills/delete-comment/SKILL.md",
+  "tooling/oxfmtrc.json": ".oxfmtrc.json",
 };
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
