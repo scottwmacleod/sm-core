@@ -40,7 +40,8 @@ if (hook === "pre-commit") {
   } catch {}
   const refs = input.split("\n").filter((line) => line.trim());
   const pushesCommits = !refs.length || refs.some((line) => !/^0+$/.test(line.trim().split(/\s+/)[1] ?? ""));
-  if (!pushesCommits || !scripts.check) process.exit(0);
+  const script = scripts["pre-push"] ? "pre-push" : "check";
+  if (!pushesCommits || !scripts[script]) process.exit(0);
   console.warn(tip);
-  run("check");
+  run(script);
 }

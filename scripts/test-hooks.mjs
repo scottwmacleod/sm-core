@@ -71,6 +71,9 @@ check("without hk: no lint script, nothing runs", r.calls === "" && r.status ===
 r = run("pre-push", { packageJson: bunPkg, args: ["origin", "u"], input: "refs/heads/a 1 refs/heads/a 2\n" });
 check("without hk: pre-push runs the check script on Bun", r.calls === "bun run --silent check" && r.status === 0, r.calls + r.out);
 
+r = run("pre-push", { packageJson: { packageManager: "bun@1.4.5", scripts: { check: "x", "pre-push": "y" } } });
+check("without hk: a product's own pre-push script wins over check", r.calls === "bun run --silent pre-push" && r.status === 0, r.calls + r.out);
+
 r = run("pre-push", { packageJson: bunPkg, failing: "bun run --silent check" });
 check("without hk: a failing check blocks the push", r.status !== 0, r.calls + r.out);
 
