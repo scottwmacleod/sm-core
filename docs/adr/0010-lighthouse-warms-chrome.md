@@ -4,7 +4,7 @@ Supersedes the Lighthouse bullet in ADR-0007.
 
 v26.11.8 ran Lighthouse again three times when a score missed and asserted on the median. In 177 product runs from 19 to 21 Nov 2026, 33 (19%) needed that retry, every one for performance, with first-run scores from 0.69 to 0.89. The retry doubled the Lighthouse step from about 30 s to about 67 s and its time wasn't counted against the budget. Scott's no-retries rule now covers it: a check that needs a retry has a bug.
 
-The bug was a cold disk. On a fresh GitHub-hosted runner, Chrome's 293 MB `chrome` binary isn't in the page cache, so the first page load stalls on reading it. Lighthouse counts those stalls as main-thread work, and simulated throttling multiplies them by four, so total blocking time came out at 400 to 5,200 ms. Every later run on the same machine scored 0.95 to 1.0. Probes on 21 Nov, each a fresh runner building rollin (`lh-probe.yml` on rollin's `claude/project-thread-6q1n4t` branch), scored the first run:
+The bug was a cold disk. On a fresh GitHub-hosted runner, Chrome's 293 MB `chrome` binary isn't in the page cache, so the first page load stalls on reading it. Lighthouse counts those stalls as main-thread work, and simulated throttling multiplies them by four, so total blocking time came out at 400 to 5,200 ms. Every later run on the same machine scored 0.95 to 1.0. Probes on 21 Nov, each a fresh runner building rollin (rollin's `lh probe` Actions runs 44865380592, 44865618580 and 44865852944), scored the first run:
 
 | Before the first run | Runs below 0.90 |
 | --- | --- |
