@@ -38,7 +38,7 @@ on:
         type: string
         default: bun check --no-script
       test-command:
-        description: Unit tests (Vitest in random order). Empty skips the job.
+        description: Unit tests (`bun test` or Vitest, in random order). Empty skips the job.
         type: string
         default: npm test
       build-command:

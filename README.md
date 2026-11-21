@@ -179,7 +179,7 @@ permissions:
   pull-requests: write   # for the size comment
 jobs:
   budgets:
-    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.17
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.18
     with:
       dist-dir: apps/web/dist
       js-kb: 120
@@ -196,7 +196,7 @@ permissions:
   pull-requests: write
 jobs:
   auto-merge:
-    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.17
+    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.18
     secrets:
       merge-token: ${{ secrets.SM_MERGE_TOKEN }}
 ```
@@ -209,7 +209,7 @@ permissions:
   pull-requests: write
 jobs:
   dependabot:
-    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.17
+    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.18
 ```
 
 ```yaml
@@ -225,7 +225,7 @@ permissions:
   contents: read
 jobs:
   audit:
-    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.17
+    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.18
 ```
 
 ```yaml
@@ -239,7 +239,7 @@ permissions:
   issues: write
 jobs:
   behind:
-    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.17
+    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.18
 ```
 
 ### Bun products
