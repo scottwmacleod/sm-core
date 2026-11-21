@@ -52,9 +52,9 @@ on:
       e2e-shards:
         description: >-
           Split the browser tests across this many jobs (1-4), each named
-          `e2e k/n`. Each job gets SM_E2E_SHARD=k/n; the product's Playwright
-          config turns it into `shard`, and should prove in its checks that the
-          shards together list every test.
+          `e2e k/n`. Each job runs e2e-command with `--shard=k/n` appended
+          (after `--` for npm) and SM_E2E_SHARD=k/n set. The product should prove
+          in a test that the shards together list every test.
         type: number
         default: 1
       e2e-command:
@@ -316,7 +316,12 @@ jobs:
         env:
           CMD: ${{ steps.plan.outputs.run }}
           SM_E2E_SHARD: ${{ steps.plan.outputs.shard }}
-        run: bash -eo pipefail -c "$CMD"
+          PM: ${{ inputs.package-manager }}
+        run: |
+          if [ -n "$SM_E2E_SHARD" ]; then
+            if [ "$PM" = npm ]; then CMD="$CMD -- --shard=$SM_E2E_SHARD"; else CMD="$CMD --shard=$SM_E2E_SHARD"; fi
+          fi
+          bash -eo pipefail -c "$CMD"
 
       - name: Within budget
         if: always()
