@@ -148,14 +148,6 @@ jobs:
         with:
           bun-version: ${{ steps.bun.outputs.version }}
 
-      - name: Restore Bun's package cache
-        if: inputs.package-manager == 'bun'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: sm-bun-cache-${{ runner.os }}-budgets-lhci0.16.1-${{ hashFiles(format('{0}/bun.lock', inputs.workspace)) }}
-          restore-keys: sm-bun-cache-${{ runner.os }}-budgets-lhci0.16.1-
-
       - name: Restore node_modules
         if: inputs.build-command != ''
         id: modules
