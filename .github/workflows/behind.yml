@@ -1,23 +1,5 @@
 name: behind
 
-# Weekly: is this repo behind sm-core? Compares vendor/sm-core/manifest.json
-# with sm-core's latest release, and the agent tools pinned in
-# vendor/sm-core/tooling/pins.json with npm. Opens one issue when anything is
-# behind and keeps it up to date; closes it when everything is current. Needs
-# only the calling repo's GITHUB_TOKEN.
-#
-# Caller:
-#   on:
-#     schedule:
-#       - cron: "17 6 * * 1"
-#     workflow_dispatch:
-#   permissions:
-#     contents: read
-#     issues: write
-#   jobs:
-#     behind:
-#       uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.3
-
 on:
   workflow_call:
     inputs:

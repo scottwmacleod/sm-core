@@ -5,7 +5,7 @@ Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin
 ## Commands
 
 - Build: `npm run build` (regenerates `dist/` and `VERSION` from `tokens.json`)
-- Check: `npm run check` (CI gate: `dist/` is current, token names and the version are valid, every contrast pair passes, and sync plus verify work on a throwaway repo, and the PostHog loader passes its checks)
+- Check: `npm run check` (CI gate: `dist/` is current, token names and the version are valid, every contrast pair passes, sync plus verify work on a throwaway repo, the PostHog loader and the no-comments check pass their tests, and no new comment has appeared)
 - Logos: `npm ci && npm run logos` (regenerates `dist/logos`; needs Playwright's Chromium)
 
 ## Rules
@@ -19,6 +19,8 @@ Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin
 - `build`, `check`, `sync`, `verify` and the hooks stay dependency-free so any stack can run them.
 - Work on a branch and open a PR; never commit to `main`.
 - Every change to `scripts/` uses `/tdd`: a failing check comes first.
+- No code comments (ADR-0001). After deleting any, run `node tooling/lint/no-comments.mjs --update` and commit `comments-baseline.json`. `/delete-comment` clears a backlog.
+- `.claude/skills/delete-comment/SKILL.md` is a copy of `tooling/skills/delete-comment/SKILL.md`; edit the tooling one and copy it over (`test-sync.mjs` fails if they differ).
 
 ## Definition of done
 

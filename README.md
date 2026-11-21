@@ -16,6 +16,8 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `tooling/tsconfig.base.json` | TypeScript base: ES2022, `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. Products `extends` it. |
 | `tooling/github/` | The PR template and the bug and feature issue forms. Sync installs them into `.github/`. |
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
+| `tooling/lint/no-comments.mjs` | The no-comments check with its ratchet. See **No comments**. |
+| `tooling/skills/delete-comment/` | The `/delete-comment` skill. Sync installs it at `.claude/skills/delete-comment/`. |
 | `tooling/hooks/` | The pre-push hook (format, lint and typecheck on changed files) and `install.mjs`, which points git at it. |
 | `tooling/analytics/sm-posthog.js` | The PostHog loader: queues calls, loads PostHog's script once the page is idle, and serves flags without flicker. See **PostHog**. |
 | `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
@@ -42,6 +44,7 @@ Sync writes the copy to `vendor/sm-core` and installs the shared files at their 
 | `github/pull_request_template.md` | `.github/pull_request_template.md` |
 | `github/ISSUE_TEMPLATE/bug-report.yml`, `feature-request.yml` | `.github/ISSUE_TEMPLATE/` |
 | `agents/*.md` | `docs/agents/` |
+| `skills/delete-comment/SKILL.md` | `.claude/skills/delete-comment/SKILL.md` |
 
 Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edits the copy or an installed file. The PR template is the one exception: a product adds its own sections below the `<!-- product -->` line, and sync keeps them. To change any of it, change sm-core, release it and sync again.
 
@@ -98,6 +101,8 @@ capture("rolled", { dice: 2 }); // a custom event
 captureException(error);        // a caught error, e.g. in a React error boundary
 ```
 
+Call `startPostHog` once, as early as you like: until the page is idle it costs one small request at most. `onFlags` returns a function that unsubscribes. Every export is a safe no-op outside a browser and for a visitor who opted out.
+
 `flags: true` asks PostHog for the visitor's variants straight away and caches them, so the next visit renders the right variant at first paint. `flag()` records the exposure once per page, which experiment results need. `options` passes straight to `posthog.init` (for example `{ mask_all_text: true }`). After PostHog loads, `window.posthog` is the full SDK.
 
 Proxy PostHog through the product's domain, so blockers miss it and the CSP stays `'self'`. In `vercel.json`, before any catch-all rewrite:
@@ -129,7 +134,7 @@ Reusable workflows in `.github/workflows/`. A product calls them at a release ta
 
 Merges and `main`: a PR merged with `GITHUB_TOKEN` starts no workflows for that push to `main`. So each caller of `auto-merge.yml` passes the repo secret `SM_MERGE_TOKEN` as `merge-token`: a fine-grained token for Scott's account with Contents, Pull requests and Workflows set to read and write on the four sm_ repos. Auto-merge is turned on with it, so the merge starts deploys, releases and `main`'s CI. Without the secret it falls back to `GITHUB_TOKEN`, which is why `release.yml` still runs hourly and `budgets.yml` callers refresh `main`'s sizes daily. Dependabot PRs can't read Actions secrets, so their merges still start nothing.
 
-Each workflow's header has a caller example. The product's main workflow looks like this, with one required check named `ci`:
+The product's main workflow looks like this, with one required check named `ci`:
 
 ```yaml
 name: ci
@@ -156,6 +161,86 @@ jobs:
 ```
 
 The inputs default to the shared script names (`npm run lint`, `bun check --no-script`, `npm test`, `npm run build`, `npm run e2e`) and to Node from `.nvmrc`. Pass an empty string to drop a job. sm-core's own `ci.yml` runs `web-ci.yml` from the same commit, as an npm caller and as a Bun caller (`scripts/fixtures/bun-caller`), so a change to it is proven before it's tagged.
+
+### Callers for the other workflows
+
+Swap the tag for the latest release. A Bun product adds `package-manager: bun` to `budgets.yml` and `audit.yml`.
+
+```yaml
+# budgets: main's runs record the "before" sizes; the daily run covers pushes that auto-merge started no run for
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 4 * * *"
+permissions:
+  contents: read
+  pull-requests: write   # for the size comment
+jobs:
+  budgets:
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.14
+    with:
+      dist-dir: apps/web/dist
+      js-kb: 120
+      css-kb: 20
+```
+
+```yaml
+# auto-merge
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened, labeled, unlabeled]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  auto-merge:
+    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.14
+    secrets:
+      merge-token: ${{ secrets.SM_MERGE_TOKEN }}
+```
+
+```yaml
+# dependabot-automerge
+on: pull_request
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  dependabot:
+    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.14
+```
+
+```yaml
+# audit
+on:
+  pull_request:
+    paths: ["**/package.json", "**/package-lock.json", "**/bun.lock"]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "43 5 * * 1"
+permissions:
+  contents: read
+jobs:
+  audit:
+    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.14
+```
+
+```yaml
+# behind
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  behind:
+    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.14
+```
 
 ### Bun products
 
@@ -185,6 +270,19 @@ Vercel's bundled Bun (1.3.14) can't read a Bun 1.4 `bun.lock`, so install the pi
 ```
 
 `npm i -g bun` doesn't work there: npm 12 blocks Bun's postinstall. Drop the workaround once Vercel ships Bun 1.4. Dependabot uses the `bun` ecosystem.
+
+## No comments
+
+The suite bans code comments. A reason belongs in a name, a test, an ADR or the PR; usage belongs in the README. `tooling/lint/no-comments.mjs` enforces it with a ratchet: `comments-baseline.json` at the repo root records how many comment lines each file may keep, and the count can only go down. It reads JS and TS (and JSON/JSONC), CSS, HTML (markup, `<script>` and `<style>`), YAML, TOML and shell. Markdown isn't code and isn't read. Tool directives (`biome-ignore`, `@ts-expect-error`, a shebang, the `# v7.0.1` beside a SHA-pinned action) aren't comments.
+
+```sh
+node vendor/sm-core/tooling/lint/no-comments.mjs --init     # once: record today's comments as the baseline
+node vendor/sm-core/tooling/lint/no-comments.mjs            # in CI: fails on a new comment, or on a deletion the baseline hasn't recorded
+node vendor/sm-core/tooling/lint/no-comments.mjs --update   # after deleting comments: lowers the baseline (never raises it)
+node vendor/sm-core/tooling/lint/no-comments.mjs --report   # comment lines per file, and how many lines deleting them all sheds
+```
+
+Run it from the repo root (Bun products: `bun vendor/...`). Add it to web-ci's `checks` input or to the `lint` script. Paths listed in the baseline's `ignore` (generated files, such as `worker-configuration.d.ts`) and the `vendor/sm-core` copy are never read. To clear the backlog, run `/delete-comment` (sync installs it at `.claude/skills/delete-comment/`).
 
 ## Changing the brand
 

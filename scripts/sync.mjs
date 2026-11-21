@@ -1,27 +1,10 @@
-// Copies this release of sm-core into a product repo.
-//
-//   node scripts/sync.mjs <target-dir>
-//   e.g. node ../sm-core/scripts/sync.mjs vendor/sm-core   (run from the product repo root)
-//
-// Writes the generated CSS, tokens.json, logos and tooling/ into <target-dir>,
-// with a manifest.json that holds the version and a SHA-256 of every file, and
-// verify.mjs. It also installs the shared GitHub templates and agent docs at
-// their usual paths in the product (see INSTALL below), keeping anything the
-// product wrote below the PR template's product marker.
-//
-// The product's CI runs `node vendor/sm-core/verify.mjs`, so a hand edit to the
-// copy or to an installed file fails the build. Check out the release tag (e.g.
-// v26.11.1) in sm-core before syncing.
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Products may add their own text below this line (on a line of its own).
 const markerAt = (text) => text.search(/^<!-- product -->$/m);
 
-// tooling/ file -> where it goes in the product, relative to the repo root.
-// Biome and tsconfig bases are extended in place; the hooks run from the copy.
 export const INSTALL = {
   "tooling/github/pull_request_template.md": ".github/pull_request_template.md",
   "tooling/github/ISSUE_TEMPLATE/bug-report.yml": ".github/ISSUE_TEMPLATE/bug-report.yml",
@@ -30,6 +13,7 @@ export const INSTALL = {
   "tooling/agents/triage-labels.md": "docs/agents/triage-labels.md",
   "tooling/agents/domain.md": "docs/agents/domain.md",
   "tooling/agents/sm-conventions.md": "docs/agents/sm-conventions.md",
+  "tooling/skills/delete-comment/SKILL.md": ".claude/skills/delete-comment/SKILL.md",
 };
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -67,7 +51,7 @@ function main() {
     const rel = src.replace(/^dist\//, "");
     const to = join(dest, rel);
     mkdirSync(dirname(to), { recursive: true });
-    copyFileSync(resolve(root, src), to); // keeps the mode, so hooks stay executable
+    copyFileSync(resolve(root, src), to);
     files[rel] = sha(readFileSync(to));
   }
 

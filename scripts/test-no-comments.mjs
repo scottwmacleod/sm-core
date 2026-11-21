@@ -1,0 +1,117 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { findComments } from "../tooling/lint/no-comments.mjs";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const tool = join(root, "tooling/lint/no-comments.mjs");
+const failures = [];
+const check = (name, ok, detail = "") => ok || failures.push(`${name}${detail ? `\n${detail}` : ""}`);
+const lines = (path, text) => findComments(path, text).comments.map((c) => c.line);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const PIN = "3d3c42e5aac5ba805825da76410c181273ba90b1";
+
+const js = [
+  "#!/usr/bin/env node",
+  "// a line comment",
+  "const url = 'https://example.com'; // trailing",
+  'const s = "/* not a comment */";',
+  "const r = /\\/\\/ not a comment/g;",
+  "const t = `${'//'} ${`/* nested */`}`;",
+  "/* a block",
+  "   over two lines */",
+  "// biome-ignore lint/style: a directive, allowed",
+  "// @ts-expect-error a directive, allowed",
+  "const d = a / b; // after division",
+  "const e = x.map((y) => y / 2); /* after */",
+].join("\n");
+const got = lines("a.mjs", js);
+check("JS: finds line, trailing and block comments only", same(got, [2, 3, 7, 11, 12]), `got ${got}`);
+check("JS: shebang and directives aren't counted", !got.includes(1) && !got.includes(9) && !got.includes(10));
+const jsCount = findComments("a.mjs", js);
+check("JS: a block comment counts each of its lines", jsCount.lines === 6, `got ${jsCount.lines}`);
+check("JS: only whole-line comments shed lines", jsCount.shed === 3, `got ${jsCount.shed}`);
+
+const yml = [
+  "# a header",
+  "on: push",
+  `  - uses: actions/checkout@${PIN} # v7.0.1`,
+  '    color: "#fff" # trailing',
+  "    run: echo $# '# quoted' ${#x}",
+  "  key: value#not",
+].join("\n");
+check("YAML: finds comments, keeps action pins and quoted #", same(lines("w.yml", yml), [1, 4]), `got ${lines("w.yml", yml)}`);
+
+check("shell: shebang allowed, comment found", same(lines("hook", "#!/bin/sh\n# say hi\necho hi\n"), [2]));
+check("CSS: block comments", same(lines("a.css", 'a { content: "/* no */"; }\n/* yes */\n'), [2]));
+const html = '<!-- one -->\n<p>"//" text</p>\n<script>\nlet a = 1; // two\n</script>\n<style>\n/* three */\n</style>\n';
+check("HTML: markup, script and style comments", same(lines("a.html", html), [1, 4, 7]), `got ${lines("a.html", html)}`);
+check("JSONC: comments", same(lines("tsconfig.json", '{\n  // why\n  "a": "//"\n}\n'), [2]));
+check("Markdown isn't scanned", findComments("a.md", "<!-- product -->\n") === null);
+
+const repo = mkdtempSync(join(tmpdir(), "sm-no-comments-"));
+const at = (p) => join(repo, p);
+const write = (p, text) => {
+  mkdirSync(dirname(at(p)), { recursive: true });
+  writeFileSync(at(p), text);
+};
+const run = (...args) => spawnSync("node", [tool, ...args], { cwd: repo, encoding: "utf8" });
+const baseline = () => JSON.parse(readFileSync(at("comments-baseline.json"), "utf8"));
+
+try {
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  write("src/a.js", "// one\nlet a = 1; // two\n");
+  write("src/b.js", "let b = 2;\n");
+  write("vendor/sm-core/x.js", "// a synced copy, never counted\n");
+  write("dist/out.css", "/* generated */\n");
+  write("notes.md", "<!-- not code -->\n");
+
+  let r = run();
+  check("no baseline: any comment fails", r.status === 1 && r.stderr.includes("src/a.js:1"), r.stderr);
+  check("the synced sm-core copy is never scanned", !r.stderr.includes("vendor/sm-core"));
+
+  r = run("--init");
+  check("--init writes the baseline", r.status === 0 && baseline().files["src/a.js"] === 2, r.stderr);
+  check("--init records no clean file", !("src/b.js" in baseline().files));
+  r = run("--init");
+  check("--init refuses to overwrite a baseline", r.status === 1);
+
+  const b = baseline();
+  b.ignore = ["dist/"];
+  write("comments-baseline.json", JSON.stringify(b));
+  r = run();
+  check("at the baseline, with dist/ ignored: passes", r.status === 0, r.stderr);
+
+  write("src/b.js", "let b = 2; // new\n");
+  r = run();
+  check("a new comment fails and names its line", r.status === 1 && r.stderr.includes("src/b.js:1"), r.stderr);
+  r = run("--update");
+  check("--update never raises the baseline", r.status === 1 && !("src/b.js" in baseline().files), r.stderr);
+  write("src/b.js", "let b = 2;\n");
+
+  write("src/a.js", "let a = 1; // two\n");
+  r = run();
+  check("fewer comments than the baseline fails until it's updated", r.status === 1 && r.stderr.includes("--update"), r.stderr);
+  r = run("--update");
+  check("--update lowers the baseline", r.status === 0 && baseline().files["src/a.js"] === 1, r.stderr);
+  check("--update keeps ignore", same(baseline().ignore, ["dist/"]));
+
+  write("src/a.js", "let a = 1;\n");
+  run("--update");
+  check("--update drops files that reach zero", !("src/a.js" in baseline().files));
+
+  write("src/c.js", "// a\n// b\nlet c; // d\n");
+  r = run("--report");
+  check("--report counts comment lines and the lines deleting them sheds", r.status === 0 && r.stdout.includes("3 comment lines") && r.stdout.includes("2 lines"), r.stdout);
+} finally {
+  rmSync(repo, { recursive: true, force: true });
+}
+
+if (failures.length) {
+  console.error(failures.map((f) => `✗ ${f}`).join("\n"));
+  process.exit(1);
+}
+console.log("✓ no-comments finds comments in every language and only ratchets down");
