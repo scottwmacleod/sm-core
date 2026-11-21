@@ -305,7 +305,11 @@ jobs:
               for pkg in $need; do
                 for f in "$debs/${pkg}"_*.deb; do [ -e "$f" ] && files+=("$f"); done
               done
-              if [ "${#files[@]}" -gt 0 ]; then sudo dpkg -i "${files[@]}" > /dev/null || true; fi
+              if [ "${#files[@]}" -gt 0 ]; then
+                start=$SECONDS
+                sudo dpkg --force-unsafe-io -i "${files[@]}" > /dev/null || true
+                echo "dpkg installed ${#files[@]} cached packages in $((SECONDS - start)) s"
+              fi
               $X playwright install-deps --dry-run chromium-headless-shell > /dev/null ||
                 $X playwright install-deps chromium-headless-shell > /dev/null
             fi
