@@ -15,5 +15,8 @@
     "test": "bun ../../test-sync.mjs",
     "build": "bun build index.js --outdir dist",
     "e2e": "bun check-shard.js"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
   }
 }
