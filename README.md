@@ -24,7 +24,7 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `.github/workflows/` | The shared CI, called by products at a release tag. See **Shared CI**. |
 | `VERSION` | The release, CalVer `YY.MM`, plus `.N` for a second release in the same month (`26.11.1`). |
 
-The site's favicon is `sm_`. Both `sm-lime-*` and `sm-dark-*` ship until the tile colour is decided.
+The site's favicon is `sm_` on a dark tile (`sm-dark-*`). Every icon tile is dark; lime is only the cursor.
 
 ## Using it in a product
 
@@ -179,7 +179,7 @@ permissions:
   pull-requests: write   # for the size comment
 jobs:
   budgets:
-    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.15
+    uses: scottwmacleod/sm-core/.github/workflows/budgets.yml@v26.11.16
     with:
       dist-dir: apps/web/dist
       js-kb: 120
@@ -196,7 +196,7 @@ permissions:
   pull-requests: write
 jobs:
   auto-merge:
-    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.15
+    uses: scottwmacleod/sm-core/.github/workflows/auto-merge.yml@v26.11.16
     secrets:
       merge-token: ${{ secrets.SM_MERGE_TOKEN }}
 ```
@@ -209,7 +209,7 @@ permissions:
   pull-requests: write
 jobs:
   dependabot:
-    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.15
+    uses: scottwmacleod/sm-core/.github/workflows/dependabot-automerge.yml@v26.11.16
 ```
 
 ```yaml
@@ -225,7 +225,7 @@ permissions:
   contents: read
 jobs:
   audit:
-    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.15
+    uses: scottwmacleod/sm-core/.github/workflows/audit.yml@v26.11.16
 ```
 
 ```yaml
@@ -239,7 +239,7 @@ permissions:
   issues: write
 jobs:
   behind:
-    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.15
+    uses: scottwmacleod/sm-core/.github/workflows/behind.yml@v26.11.16
 ```
 
 ### Bun products
