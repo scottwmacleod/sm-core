@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,12 +39,15 @@ try {
   if (!pr.includes("## Merge Danger") || !pr.includes("## Test checklist")) {
     failures.push("sync didn't merge the shared PR template with the product's own section");
   }
-  const skill = "tooling/skills/delete-comment/SKILL.md";
-  if (readFileSync(at(".claude/skills/delete-comment/SKILL.md"), "utf8") !== readFileSync(join(root, skill), "utf8")) {
-    failures.push("sync didn't install the /delete-comment skill");
-  }
-  if (readFileSync(join(root, ".claude/skills/delete-comment/SKILL.md"), "utf8") !== readFileSync(join(root, skill), "utf8")) {
-    failures.push(`sm-core's own .claude/skills/delete-comment/SKILL.md differs from ${skill}; copy it over`);
+  for (const name of ["delete-comment", "steward"]) {
+    const skill = `tooling/skills/${name}/SKILL.md`;
+    const installed = `.claude/skills/${name}/SKILL.md`;
+    if (!existsSync(at(installed)) || readFileSync(at(installed), "utf8") !== readFileSync(join(root, skill), "utf8")) {
+      failures.push(`sync didn't install the /${name} skill`);
+    }
+    if (!existsSync(join(root, installed)) || readFileSync(join(root, installed), "utf8") !== readFileSync(join(root, skill), "utf8")) {
+      failures.push(`sm-core's own ${installed} differs from ${skill}; copy it over`);
+    }
   }
   if (readFileSync(at(".oxfmtrc.json"), "utf8") !== readFileSync(join(root, "tooling/oxfmtrc.json"), "utf8")) {
     failures.push("sync didn't install the shared bun fmt config at .oxfmtrc.json");
