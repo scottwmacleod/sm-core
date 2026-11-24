@@ -20,7 +20,8 @@ Brand and tooling core of the sm_ suite (scottmacleod.co, planning-poker, rollin
 - Work on a branch and open a PR; never commit to `main`.
 - Every change to `scripts/` uses `/tdd`: a failing check comes first.
 - No code comments (ADR-0001). After deleting any, run `node tooling/lint/no-comments.mjs --update` and commit `comments-baseline.json`. `/delete-comment` clears a backlog.
-- `.claude/skills/delete-comment/SKILL.md` is a copy of `tooling/skills/delete-comment/SKILL.md`; edit the tooling one and copy it over (`test-sync.mjs` fails if they differ).
+- `.claude/skills/delete-comment/SKILL.md` and `.claude/skills/steward/SKILL.md` are copies of the files under `tooling/skills/`; edit the tooling ones and copy them over (`test-sync.mjs` fails if they differ).
+- After opening a PR, follow "After you open a PR" in `tooling/agents/sm-conventions.md`.
 
 ## Definition of done
 

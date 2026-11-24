@@ -20,6 +20,7 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
 | `tooling/lint/no-comments.mjs` | The no-comments check with its ratchet. See **No comments**. |
 | `tooling/skills/delete-comment/` | The `/delete-comment` skill. Sync installs it at `.claude/skills/delete-comment/`. |
+| `tooling/skills/steward/` | House rules for looking after an open PR, read by `/ship`, `/steward` and cloud sessions watching a PR. Sync installs it at `.claude/skills/steward/`. |
 | `tooling/hooks/` | The hk git hooks: `sm.pkl` (pre-commit formats and lints staged files, pre-push runs `check`), hk's schema in `hk/`, a fallback for machines without hk, and `install.mjs`, which points git at them. |
 | `tooling/analytics/sm-posthog.js` | The PostHog loader: queues calls, loads PostHog's script once the page is idle, and serves flags without flicker. See **PostHog**. |
 | `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
@@ -47,6 +48,7 @@ Sync writes the copy to `vendor/sm-core` and installs the shared files at their 
 | `github/ISSUE_TEMPLATE/bug-report.yml`, `feature-request.yml` | `.github/ISSUE_TEMPLATE/` |
 | `agents/*.md` | `docs/agents/` |
 | `skills/delete-comment/SKILL.md` | `.claude/skills/delete-comment/SKILL.md` |
+| `skills/steward/SKILL.md` | `.claude/skills/steward/SKILL.md` |
 
 Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edits the copy or an installed file. The PR template is the one exception: a product adds its own sections below the `<!-- product -->` line, and sync keeps them. To change any of it, change sm-core, release it and sync again.
 
