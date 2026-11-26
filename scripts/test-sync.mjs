@@ -33,13 +33,16 @@ const PR = ".github/pull_request_template.md";
 
 try {
   mkdirSync(at(".github"), { recursive: true });
+  mkdirSync(at(".claude/skills/steward"), { recursive: true });
+  writeFileSync(at(".claude/skills/steward/SKILL.md"), "retired\n");
   writeFileSync(at(PR), "old shared text\n<!-- product -->\n\n## Test checklist\n\n- [ ]\n");
   sync();
+  if (existsSync(at(".claude/skills/steward"))) failures.push("sync didn't remove the retired .claude/skills/steward");
   const pr = readFileSync(at(PR), "utf8");
   if (!pr.includes("## Merge Danger") || !pr.includes("## Test checklist")) {
     failures.push("sync didn't merge the shared PR template with the product's own section");
   }
-  for (const name of ["delete-comment", "steward"]) {
+  for (const name of ["delete-comment"]) {
     const skill = `tooling/skills/${name}/SKILL.md`;
     const installed = `.claude/skills/${name}/SKILL.md`;
     if (!existsSync(at(installed)) || readFileSync(at(installed), "utf8") !== readFileSync(join(root, skill), "utf8")) {
