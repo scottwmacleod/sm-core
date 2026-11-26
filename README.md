@@ -300,4 +300,4 @@ Run it from the repo root (Bun products: `bun vendor/...`). Add it to web-ci's `
 
 Tooling changes follow the same path: edit `tooling/`, bump `version` in `tokens.json` (`26.11.2`), run `npm run build` and open a PR. Merging tags and releases it; then sync.
 
-Node 22. `build`, `check` and `sync` have no dependencies; only `logos` needs `npm ci`. `check` also runs `scripts/test-sync.mjs`, which syncs into a throwaway repo and proves `verify.mjs` catches edits, on Node and, when it's installed, on Bun.
+Node 26. `build`, `check` and `sync` have no dependencies; only `logos` needs `npm ci`. `check` also runs `scripts/test-sync.mjs`, which syncs into a throwaway repo and proves `verify.mjs` catches edits, on Node and, when it's installed, on Bun.
