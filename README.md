@@ -17,10 +17,9 @@ The rules for using all of this are in the [sm_ core style guide](https://claude
 | `tooling/biome.base.json` | Biome base, for what `bun lint` can't check: CSS (the recommended rules) and 9 JavaScript rules. Formatter off. Products `extends` it from `vendor/sm-core/tooling/`. |
 | `tooling/tsconfig.base.json` | TypeScript base: ES2022, `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. Products `extends` it. |
 | `tooling/github/` | The PR template and the bug and feature issue forms. Sync installs them into `.github/`. |
-| `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md` and `sm-conventions.md`, the rules every repo shares. Sync installs them into `docs/agents/`. |
+| `tooling/agents/` | `issue-tracker.md`, `triage-labels.md`, `domain.md`, `sm-conventions.md` and the docs it points at (`looking-after-prs.md`, `ui-browser-checks.md`, `prune-tests.md`), the rules every repo shares. Sync installs them into `docs/agents/`. |
 | `tooling/lint/no-comments.mjs` | The no-comments check with its ratchet. See **No comments**. |
 | `tooling/skills/delete-comment/` | The `/delete-comment` skill. Sync installs it at `.claude/skills/delete-comment/`. |
-| `tooling/skills/steward/` | House rules for looking after an open PR, read by `/ship`, `/steward` and cloud sessions watching a PR. Sync installs it at `.claude/skills/steward/`. |
 | `tooling/hooks/` | The hk git hooks: `sm.pkl` (pre-commit formats and lints staged files, pre-push runs `check`), hk's schema in `hk/`, a fallback for machines without hk, and `install.mjs`, which points git at them. |
 | `tooling/analytics/sm-posthog.js` | The PostHog loader: queues calls, loads PostHog's script once the page is idle, and serves flags without flicker. See **PostHog**. |
 | `tooling/pins.json` | Agent tools pinned outside `package.json` (agent-browser, modern-web-guidance), for the behind-check. |
@@ -48,7 +47,6 @@ Sync writes the copy to `vendor/sm-core` and installs the shared files at their 
 | `github/ISSUE_TEMPLATE/bug-report.yml`, `feature-request.yml` | `.github/ISSUE_TEMPLATE/` |
 | `agents/*.md` | `docs/agents/` |
 | `skills/delete-comment/SKILL.md` | `.claude/skills/delete-comment/SKILL.md` |
-| `skills/steward/SKILL.md` | `.claude/skills/steward/SKILL.md` |
 
 Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edits the copy or an installed file. The PR template is the one exception: a product adds its own sections below the `<!-- product -->` line, and sync keeps them. To change any of it, change sm-core, release it and sync again.
 
@@ -65,7 +63,7 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 
 **Git hooks:** add `"prepare": "bun vendor/sm-core/tooling/hooks/install.mjs"` to `package.json` and an `hk.pkl` at the root that says `amends "vendor/sm-core/tooling/hooks/sm.pkl"`. Install [hk](https://hk.jdx.dev) with `mise use -g hk` or `brew install hk`. Pre-commit runs the `format` script on the staged files, stages the result, then runs `lint` on them; pre-push runs `check`, the same command as CI. `format` and `lint` must accept file paths (`lint` may check more than it's given). Without hk the hooks still run: `lint` on the staged files without fixing, and `check` on push. See ADR-0009.
 
-**Agent docs:** point `AGENTS.md` at `docs/agents/sm-conventions.md` and keep only what's specific to the product.
+**Agent docs:** `CLAUDE.md` imports `@AGENTS.md` and `@docs/agents/sm-conventions.md`; keep `AGENTS.md` to what's specific to the product. Sync removes files it no longer installs (`RETIRED` in `scripts/sync.mjs`), such as the old `.claude/skills/steward/`.
 
 **Plain HTML:** link or inline `vendor/sm-core/sm-core.css` and use the variables (`background: var(--sm-ground)`).
 

@@ -13,10 +13,14 @@ export const INSTALL = {
   "tooling/agents/triage-labels.md": "docs/agents/triage-labels.md",
   "tooling/agents/domain.md": "docs/agents/domain.md",
   "tooling/agents/sm-conventions.md": "docs/agents/sm-conventions.md",
+  "tooling/agents/looking-after-prs.md": "docs/agents/looking-after-prs.md",
+  "tooling/agents/ui-browser-checks.md": "docs/agents/ui-browser-checks.md",
+  "tooling/agents/prune-tests.md": "docs/agents/prune-tests.md",
   "tooling/skills/delete-comment/SKILL.md": ".claude/skills/delete-comment/SKILL.md",
-  "tooling/skills/steward/SKILL.md": ".claude/skills/steward/SKILL.md",
   "tooling/oxfmtrc.json": ".oxfmtrc.json",
 };
+
+export const RETIRED = [".claude/skills/steward"];
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 const slash = (p) => p.split("\\").join("/");
@@ -69,6 +73,8 @@ function main() {
     writeFileSync(out, body);
     installed[to] = from.replace(/^dist\//, "");
   }
+
+  for (const old of RETIRED) rmSync(resolve(product, old), { recursive: true, force: true });
 
   copyFileSync(resolve(root, "scripts/verify.mjs"), join(dest, "verify.mjs"));
   writeFileSync(
