@@ -63,7 +63,7 @@ Add `node vendor/sm-core/verify.mjs` to the product's CI. It fails if anyone edi
 
 **Git hooks:** add `"prepare": "bun vendor/sm-core/tooling/hooks/install.mjs"` to `package.json` and an `hk.pkl` at the root that says `amends "vendor/sm-core/tooling/hooks/sm.pkl"`. Install [hk](https://hk.jdx.dev) with `mise use -g hk` or `brew install hk`. Pre-commit runs the `format` script on the staged files, stages the result, then runs `lint` on them; pre-push runs `check`, the same command as CI. `format` and `lint` must accept file paths (`lint` may check more than it's given). Without hk the hooks still run: `lint` on the staged files without fixing, and `check` on push. See ADR-0009.
 
-**Agent docs:** `CLAUDE.md` imports `@AGENTS.md` and `@docs/agents/sm-conventions.md`; keep `AGENTS.md` to what's specific to the product. Sync removes files it no longer installs (`RETIRED` in `scripts/sync.mjs`), such as the old `.claude/skills/steward/`.
+**Agent docs:** each product's `CLAUDE.md` starts with `@docs/agents/sm-conventions.md`, then holds only what's specific to the product. There is no `AGENTS.md`. Sync removes files it no longer installs (`RETIRED` in `scripts/sync.mjs`), such as the old `.claude/skills/steward/`.
 
 **Plain HTML:** link or inline `vendor/sm-core/sm-core.css` and use the variables (`background: var(--sm-ground)`).
 

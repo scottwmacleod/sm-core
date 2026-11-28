@@ -17,7 +17,7 @@ jobs:
       typecheck-command: ""
       test-command: npm run check
       build-command: ""
-      skip-paths: '^(README\.md|AGENTS\.md|CLAUDE\.md)$'
+      skip-paths: '^(README\.md|CLAUDE\.md)$'
       lint-budget-seconds: 30
       test-budget-seconds: 45
 
@@ -27,7 +27,7 @@ jobs:
       workspace: scripts/fixtures/bun-caller
       package-manager: bun
       typecheck-command: ""
-      skip-paths: '^(README\.md|AGENTS\.md|CLAUDE\.md)$'
+      skip-paths: '^(README\.md|CLAUDE\.md)$'
       lint-budget-seconds: 30
       test-budget-seconds: 45
       build-budget-seconds: 30
